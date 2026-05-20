@@ -1,6 +1,6 @@
 ---
 name: memory-sync
-description: Push, pull, configure, or list Claude Code per-project memory between this machine and the user's configured backup git repo. Supports per-project include/exclude selection and HOME-relative storage so memories restore correctly on any machine. Trigger when the user invokes /memory-sync (with mode push, pull, status, list, configure, migrate) or says "backup my memory", "sync memory", "pull memory", "restore memory on this machine", "which projects do I back up", or "set up memory backup".
+description: Push, pull, configure, or list Claude Code per-project memory between this machine and the user's configured backup git repo. Includes an interactive init flow that creates the backup repo for the user. Supports per-project include/exclude selection and HOME-relative storage so memories restore correctly on any machine. Trigger when the user invokes /memory-sync (with mode init, push, pull, status, list, select, configure, migrate) or says "backup my memory", "sync memory", "pull memory", "set up memory backup", "first-time setup", or "which projects do I back up".
 ---
 
 # Memory Sync
@@ -19,13 +19,16 @@ The user invokes one of:
 
 | Mode | Action |
 |---|---|
-| `configure` | First-time setup, switch destination, or update project selection. Flags: `--backup-repo=/abs/path`, `--include=PATTERN` (append to include list), `--exclude=PATTERN` (append to exclude list), `--reset-projects` (clear both lists). Run `node $SCRIPTS/configure.mjs <flags>`. |
+| `init` | **Interactive first-time setup.** Walk the user through creating or selecting a backup repo and configuring the plugin. See "Init mode" below. |
+| `configure` | Switch destination or update project selection (no prompts; flag-driven). Flags: `--backup-repo=/abs/path`, `--include=PATTERN` (append to include list), `--exclude=PATTERN` (append to exclude list), `--reset-projects` (clear both lists). Run `node $SCRIPTS/configure.mjs <flags>`. |
 | `list` | Show every known project (local and repo) with its selection state, kind, and where its data lives. No mutation. Run `node $SCRIPTS/list.mjs`. |
-| `select` | **Interactive selection.** Drive a multi-select via AskUserQuestion; apply the result through `configure`. See "Select mode" below. |
+| `select` | **Interactive project selection.** Drive a multi-select via AskUserQuestion; apply the result through `configure`. See "Select mode" below. |
 | `push` | Local memory → backup repo (only selected projects). Run `node $SCRIPTS/push.mjs`. |
 | `pull` | Backup repo → local memory (only selected projects). Run `node $SCRIPTS/pull.mjs`. Accepts `--force` to overwrite local-only files. |
 | `status` | Show what's drifted between local and repo (only selected projects). Run `node $SCRIPTS/status.mjs`. No mutation. |
 | `migrate` | One-time migration from an older non-portable layout. Run `node $SCRIPTS/migrate.mjs`. |
+
+**Auto-route to `init` on first run.** If `~/.claude/memory-sync.config.json` does not exist (or its `backup_repo_path` is missing/invalid) AND the user invokes any other mode, run `init` first instead, then continue with the original mode after setup completes.
 
 If the user didn't specify a mode, ask via AskUserQuestion. **Don't guess between push and pull** — they are not reversible without thought.
 
@@ -65,19 +68,63 @@ When the user invokes `select` (or asks for a "fancy" / "interactive" / "pick" s
 
 Never edit `~/.claude/memory-sync.config.json` directly — always go through `configure.mjs` so validation runs.
 
-## First-time setup
+## Init mode (interactive setup)
 
-If `~/.claude/memory-sync.config.json` does not exist and the user is invoking anything other than `configure`, instruct them:
+Invoked explicitly as `init`, or auto-triggered when any other mode runs without a valid config. Steps:
 
-1. Create or clone a backup repo (recommended: PRIVATE on their own GitHub account). Example:
-   ```
-   gh repo create my-claude-memory --private --clone
-   ```
-2. Run configure with the absolute path:
-   ```
-   /memory-sync configure --backup-repo=~/my-claude-memory
-   ```
-3. Then run their original command (push/pull/status).
+### 1. Sanity check the environment
+
+Before asking the user anything, verify:
+- `gh --version` succeeds (GitHub CLI is installed) — needed for the "create a new repo for me" path.
+- `gh auth status` shows a logged-in account — same.
+- `git --version` succeeds — always required.
+
+If `gh` is missing or unauthenticated, drop the "create new repo" option from the choices (or instruct the user to install/login first).
+
+### 2. Ask the user which strategy to use
+
+Use AskUserQuestion (single-select) with three options:
+
+```
+question: "How do you want to set up the backup repo for your Claude memory?"
+header:   "Backup repo"
+options:
+  - "Create a new private repo on GitHub (recommended)"
+       I'll run `gh repo create` for you and clone it locally.
+  - "I already have a local clone"
+       Point the plugin at an existing path on this machine.
+  - "Clone an existing remote repo"
+       I'll `git clone` your remote into ~/my-claude-memory.
+```
+
+### 3. Apply the chosen strategy
+
+**Create new (recommended):** Ask a second AskUserQuestion for the repo name (default `my-claude-memory`). Then in one Bash call run:
+```bash
+gh repo create <name> --private --description "Personal Claude Code memory backup" --clone --remote=origin && mv <name> ~/<name>
+```
+The repo lands at `~/<name>`. If `mv` complains because the user ran `gh repo create` from a different cwd, just check where the clone landed and use that absolute path.
+
+**Existing local clone:** Ask a free-text question for the absolute path. Expand `~`. Validate that the path exists AND is a git repo (`.git/` present) before proceeding.
+
+**Clone existing remote:** Ask for the clone URL (e.g. `git@github.com:you/foo.git`). Run `git clone <url> ~/<basename>` where `<basename>` is the last segment of the URL without `.git`. Confirm the destination doesn't already exist before running.
+
+### 4. Configure the plugin
+
+After the repo is in place, run:
+```bash
+node $SCRIPTS/configure.mjs --backup-repo=<absolute-path>
+```
+
+Relay the configure output to the user.
+
+### 5. Offer the next step
+
+Ask whether to do a `push` (back up current local memory now) or `pull` (restore from the just-cloned repo, useful if it already has data) or `status` (just see what's there). Three-option AskUserQuestion. Run their choice.
+
+### 6. Resume the original intent
+
+If init was auto-triggered because the user invoked `/memory-sync push` (or pull, etc.) without a config, the previous step already covered it. If they invoked `/memory-sync init` explicitly, end with a recap of available modes.
 
 ## Portability
 

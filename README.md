@@ -10,52 +10,48 @@ Claude Code stores per-project memory under `~/.claude/projects/<path-encoded-pr
 
 This plugin does that. The tool repo (this one) is public; the backup repo (your choice) is where the actual memory data lives, typically a private repo on your own account.
 
-## Install
+## Quickstart (new adopter)
 
-### 1. Install the plugin
+You need three things: this plugin installed, a private backup repo to store your memory data, and the plugin pointed at that repo. The skill handles the second and third interactively — you only need to install the plugin first.
 
-This repo is itself a Claude Code marketplace (it has a `.claude-plugin/marketplace.json`). Inside Claude Code:
+### 1. Install the plugin (three slash commands)
+
+Inside Claude Code:
 
 ```
 /plugin marketplace add gagoar/claude-memory-sync
 /plugin install claude-memory-sync@claude-memory-sync
+/reload-plugins
 ```
 
-Or, if your Claude Code version supports a single-step path:
+(Standard Claude Code plugin flow — adding the repo as a marketplace, installing the plugin from it, then reloading so the skill registers.)
+
+### 2. Run the interactive setup
 
 ```
-/plugin install gagoar/claude-memory-sync
+/memory-sync init
 ```
 
-The exact slash-command syntax may vary by Claude Code release — running `/plugin` (no args) opens an interactive plugin browser, and adding this repo as a marketplace makes the plugin appear in the list.
+The skill will:
+- Detect what's installed on your machine (`gh`, `git`, GitHub auth).
+- Ask which backup strategy you want (single AskUserQuestion):
+  - **Create a new private repo on GitHub** — recommended; uses `gh repo create … --private --clone`.
+  - **Point at an existing local clone** — if you already have a backup repo cloned somewhere.
+  - **Clone an existing remote** — if you have a backup repo on GitHub but haven't cloned it here yet.
+- Run the appropriate `gh` / `git` commands, validate the result, and configure the plugin.
+- Offer to do an initial `push` (back up current memory) or `pull` (restore from existing backup) before exiting.
 
-### 2. Create a backup destination repo
-
-Pick any git repo you want to use as the backup store. Recommended: a **PRIVATE** repo on your own account, because memory often contains project names, internal API hostnames, and user identifiers.
+If you'd rather type the commands yourself, the manual flow is:
 
 ```bash
 gh repo create my-claude-memory --private --clone
-# this clones the new empty repo to ./my-claude-memory
-mv my-claude-memory ~/
+mv my-claude-memory ~/    # if it landed in cwd
 ```
-
-…or use any existing private repo you already have, cloned anywhere.
-
-### 3. Configure the plugin
-
-From inside Claude Code:
 
 ```
 /memory-sync configure --backup-repo=~/my-claude-memory
+/memory-sync push
 ```
-
-Or directly:
-
-```bash
-node ~/claude-memory-sync/scripts/configure.mjs --backup-repo=~/my-claude-memory
-```
-
-This writes `~/.claude/memory-sync.config.json`. Re-run any time to switch destinations.
 
 ## Use
 
@@ -108,20 +104,17 @@ Already-pushed data for a project you later add to `--exclude` stays in the back
 
 ## On a new machine
 
-```bash
-# 1. Clone the plugin
-git clone https://github.com/gagoar/claude-memory-sync.git ~/claude-memory-sync
-# (then register with Claude Code's plugin manager)
+Same flow as quickstart — install the plugin, then run init and pick **"Clone an existing remote"** when asked. Once configured, run `/memory-sync pull` to restore every memory file.
 
-# 2. Clone your backup repo
-git clone git@github.com:you/my-claude-memory.git ~/my-claude-memory
-
-# 3. Wire them together and restore
-/memory-sync configure --backup-repo=~/my-claude-memory
+```
+/plugin marketplace add gagoar/claude-memory-sync
+/plugin install claude-memory-sync@claude-memory-sync
+/reload-plugins
+/memory-sync init           # pick "Clone an existing remote", give it your backup-repo URL
 /memory-sync pull
 ```
 
-Every memory file from every project lands back in `~/.claude/projects/<project>/memory/`, with the project keys automatically reconstructed for this machine's `$HOME`.
+Memory files from every project land back in `~/.claude/projects/<project>/memory/`, with the project keys automatically reconstructed for this machine's `$HOME`. No manual renaming, no path-decoding gymnastics.
 
 ## How HOME-relative storage works
 
