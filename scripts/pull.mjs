@@ -60,12 +60,12 @@ async function main() {
         if (!repoMap.has(p)) wouldOverwrite.push({ p, kind: 'local-only' });
         else if (repoMap.get(p) !== sha) wouldOverwrite.push({ p, kind: 'differs' });
       }
-      if (wouldOverwrite.length) conflicts.push({ projectKey: proj.projectKey, items: wouldOverwrite });
+      if (wouldOverwrite.length) conflicts.push({ localKey: proj.localKey, items: wouldOverwrite });
     }
     if (conflicts.length) {
       console.error('error: local memory has changes the backup repo does not. Pull would lose them.\n');
       for (const c of conflicts) {
-        console.error(`  [${c.projectKey}]`);
+        console.error(`  [${c.localKey}]`);
         for (const it of c.items) console.error(`    ${it.kind.padEnd(11)} ${it.p}`);
       }
       console.error('\nFix one of:');
@@ -103,7 +103,7 @@ async function main() {
     totals.changed  += d.changed.length;
     totals.removed  += FORCE ? d.removed.length : 0;
     totals.unchanged += d.unchanged.length;
-    console.log(`[${proj.projectKey}] +${d.added.length} ~${d.changed.length} -${FORCE ? d.removed.length : 0}`);
+    console.log(`[${proj.localKey}] +${d.added.length} ~${d.changed.length} -${FORCE ? d.removed.length : 0}`);
   }
 
   console.log(`\n✓ pull complete. +${totals.added} ~${totals.changed} -${totals.removed} (${totals.unchanged} unchanged)`);

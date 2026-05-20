@@ -66,7 +66,7 @@ async function main() {
     totals.removed  += d.removed.length;
     totals.unchanged += d.unchanged.length;
 
-    console.log(`[${proj.projectKey}] +${d.added.length} ~${d.changed.length} -${d.removed.length}`);
+    console.log(`[${proj.localKey}] +${d.added.length} ~${d.changed.length} -${d.removed.length}`);
   }
 
   const status = run(REPO, 'git', ['status', '--porcelain', 'data/']);

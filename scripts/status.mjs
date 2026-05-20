@@ -11,8 +11,8 @@ async function main() {
   const repo  = await listRepoProjects(cfg);
 
   const allKeys = new Set([
-    ...local.map(p => p.projectKey),
-    ...repo.map(p => p.projectKey),
+    ...local.map(p => p.localKey),
+    ...repo.map(p => p.localKey),
   ]);
 
   if (allKeys.size === 0) {
@@ -21,8 +21,8 @@ async function main() {
   }
 
   const byKey = new Map();
-  for (const p of local) byKey.set(p.projectKey, { ...byKey.get(p.projectKey), ...p, hasLocal: true });
-  for (const p of repo)  byKey.set(p.projectKey, { ...byKey.get(p.projectKey), ...p, hasRepo:  true });
+  for (const p of local) byKey.set(p.localKey, { ...byKey.get(p.localKey), ...p, hasLocal: true });
+  for (const p of repo)  byKey.set(p.localKey, { ...byKey.get(p.localKey), ...p, hasRepo:  true });
 
   let any = false;
   for (const key of [...allKeys].sort()) {
