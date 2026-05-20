@@ -7,5 +7,15 @@
     "url": "https://github.com/gagoar"
   },
   "homepage": "https://github.com/gagoar/claude-memory-sync",
-  "license": "MIT"
+  "license": "MIT",
+  "keywords": [
+    "memory",
+    "backup",
+    "sync",
+    "git",
+    "claude-code"
+  ],
+  "skills": [
+    "./skills/memory-sync"
+  ]
 }

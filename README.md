@@ -14,14 +14,20 @@ This plugin does that. The tool repo (this one) is public; the backup repo (your
 
 ### 1. Install the plugin
 
-If you have a Claude Code marketplace configured, use the standard `/plugin` flow. To install from this public repo directly as a local plugin:
+This repo is itself a Claude Code marketplace (it has a `.claude-plugin/marketplace.json`). Inside Claude Code:
 
-```bash
-# Clone the plugin somewhere persistent
-git clone https://github.com/gagoar/claude-memory-sync.git ~/claude-memory-sync
+```
+/plugin marketplace add gagoar/claude-memory-sync
+/plugin install claude-memory-sync@claude-memory-sync
 ```
 
-Then register it with Claude Code's plugin manager. Exact slash command depends on your version; common forms are `/plugin install ~/claude-memory-sync` or browsing it from a local marketplace.
+Or, if your Claude Code version supports a single-step path:
+
+```
+/plugin install gagoar/claude-memory-sync
+```
+
+The exact slash-command syntax may vary by Claude Code release — running `/plugin` (no args) opens an interactive plugin browser, and adding this repo as a marketplace makes the plugin appear in the list.
 
 ### 2. Create a backup destination repo
 
