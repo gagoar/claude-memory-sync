@@ -28,9 +28,11 @@ The user invokes one of:
 | `status` | Show what's drifted between local and repo (only selected projects). Run `node $SCRIPTS/status.mjs`. No mutation. |
 | `migrate` | One-time migration from an older non-portable layout. Run `node $SCRIPTS/migrate.mjs`. |
 
-**Auto-route to `init` on first run.** If `~/.claude/memory-sync.config.json` does not exist (or its `backup_repo_path` is missing/invalid) AND the user invokes any other mode, run `init` first instead, then continue with the original mode after setup completes.
+**Auto-route to `init` on first contact — this is the most important behavior of this skill.** If `~/.claude/memory-sync.config.json` does not exist (or its `backup_repo_path` field is missing, or that path doesn't resolve to a real git repo) and the user invokes ANY mode at all — including just `/memory-sync` with no args, or natural-language phrases like "back up my memory" — run `init` FIRST. Do not ask the user "what do you want to do?" beforehand. Do not run any push/pull/list/status until init has completed. The presence of a valid config is the only signal that init has already happened.
 
-If the user didn't specify a mode, ask via AskUserQuestion. **Don't guess between push and pull** — they are not reversible without thought.
+When init completes, if the user's original request was a different mode (push/pull/etc.), continue with that mode. If they just typed `/memory-sync init` or `/memory-sync` (no args), end with a brief recap of what's available.
+
+If a valid config DOES exist and the user invoked the skill without specifying a mode, ask via AskUserQuestion which mode they want. **Don't guess between push and pull** — they are not reversible without thought.
 
 When the user says "which projects am I backing up" / "show what's selected" / "list my projects", invoke `list`. When they say "let me pick projects" / "select projects to back up" / "choose what to sync", invoke `select`. When they say "stop backing up X" / "exclude X" / "only back up X", you can use `configure` directly with the appropriate `--include` or `--exclude` patterns — but for anything beyond one or two projects, **prefer `select`** because the UI is clearer.
 
