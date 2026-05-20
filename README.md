@@ -1,110 +1,148 @@
 # claude-memory-sync
 
-Push, pull, and diff [Claude Code](https://claude.com/claude-code) per-project memory between your machine and a Git repo of your choice. Installs as a Claude Code skill so `/memory-sync push` and `/memory-sync pull` work from inside any session.
+A [Claude Code](https://claude.com/claude-code) plugin that backs up and restores per-project memory to a Git repo of your choice. Once installed, the `/memory-sync` skill works from inside any session: `/memory-sync push`, `/memory-sync pull`, `/memory-sync status`.
 
-The tool itself (this repo) is public. The backup destination — where your memory data actually lives — is a separate git repo you configure at install time. Typically that's a **private** repo on your own account.
+Storage is **HOME-relative**, so a memory captured on `/Users/alice/...` restores cleanly on `/Users/bob/...` without manual renaming.
 
 ## Why
 
-Claude Code stores per-project memory under `~/.claude/projects/<path-encoded-project-name>/memory/`. Those files capture user preferences, project context, feedback, and references that accumulate session by session. They live only on the machine you set them up on — survive a disk wipe or a new laptop only if you back them up explicitly. This tool does that.
+Claude Code stores per-project memory under `~/.claude/projects/<path-encoded-project-name>/memory/`. Those files accumulate user preferences, project context, and feedback session by session. They live only on the machine you set them up on — survive a disk wipe or a new laptop only if you back them up explicitly.
+
+This plugin does that. The tool repo (this one) is public; the backup repo (your choice) is where the actual memory data lives, typically a private repo on your own account.
 
 ## Install
 
+### 1. Install the plugin
+
+If you have a Claude Code marketplace configured, use the standard `/plugin` flow. To install from this public repo directly as a local plugin:
+
 ```bash
-# 1. Clone this tool
+# Clone the plugin somewhere persistent
 git clone https://github.com/gagoar/claude-memory-sync.git ~/claude-memory-sync
-
-# 2. Create or clone a backup repo to store your memory data.
-#    Recommended: a PRIVATE repo on your own account, since memory often
-#    contains project names, internal hostnames, identifiers, etc.
-#    (Example for a brand-new private repo:)
-gh repo create my-claude-memory --private --clone
-# …or clone an existing one you already use:
-# git clone git@github.com:you/my-claude-memory.git ~/my-claude-memory
-
-# 3. Point the tool at your backup repo
-cd ~/claude-memory-sync
-node scripts/install.mjs --backup-repo=~/my-claude-memory
 ```
 
-`install.mjs` writes `~/.claude/memory-sync.config.json` with both repo paths, and symlinks `SKILL.md` into `~/.claude/skills/memory-sync.md` so Claude discovers it. Re-run any time you want to switch backup destinations.
+Then register it with Claude Code's plugin manager. Exact slash command depends on your version; common forms are `/plugin install ~/claude-memory-sync` or browsing it from a local marketplace.
+
+### 2. Create a backup destination repo
+
+Pick any git repo you want to use as the backup store. Recommended: a **PRIVATE** repo on your own account, because memory often contains project names, internal API hostnames, and user identifiers.
+
+```bash
+gh repo create my-claude-memory --private --clone
+# this clones the new empty repo to ./my-claude-memory
+mv my-claude-memory ~/
+```
+
+…or use any existing private repo you already have, cloned anywhere.
+
+### 3. Configure the plugin
+
+From inside Claude Code:
+
+```
+/memory-sync configure --backup-repo=~/my-claude-memory
+```
+
+Or directly:
+
+```bash
+node ~/claude-memory-sync/scripts/configure.mjs --backup-repo=~/my-claude-memory
+```
+
+This writes `~/.claude/memory-sync.config.json`. Re-run any time to switch destinations.
 
 ## Use
 
-| Goal | Terminal | Inside Claude Code |
+| Goal | In Claude Code | From terminal |
 |---|---|---|
-| Back up new/edited memory | `node ~/claude-memory-sync/scripts/push.mjs` | `/memory-sync push` |
-| Restore memory after re-cloning | `node ~/claude-memory-sync/scripts/pull.mjs` | `/memory-sync pull` |
-| See what's drifted | `node ~/claude-memory-sync/scripts/status.mjs` | `/memory-sync status` |
-| Switch backup destination | `node ~/claude-memory-sync/scripts/install.mjs --backup-repo=NEW` | re-run install |
+| Back up new memory | `/memory-sync push` | `node $PLUGIN/scripts/push.mjs` |
+| Restore on a new machine | `/memory-sync pull` | `node $PLUGIN/scripts/pull.mjs` |
+| See what's drifted | `/memory-sync status` | `node $PLUGIN/scripts/status.mjs` |
+| Switch destination | `/memory-sync configure --backup-repo=NEW` | `node $PLUGIN/scripts/configure.mjs --backup-repo=NEW` |
+| Migrate older non-portable layout | `/memory-sync migrate` | `node $PLUGIN/scripts/migrate.mjs` |
 
-- `push.mjs` no-ops cleanly if there's nothing new.
-- `pull.mjs` refuses to overwrite local files that aren't in the backup repo unless `--force` is passed.
-- Both scripts only ever touch `~/.claude/projects/*/memory/` — never settings, sessions, cache, or anything else under `~/.claude/`.
+Notes:
+- `push.mjs` no-ops cleanly when nothing has changed.
+- `pull.mjs` refuses to overwrite local files that the backup repo lacks unless `--force` is passed.
+- Both `push` and `pull` only touch `~/.claude/projects/*/memory/` and your configured backup repo. Never `settings.local.json`, `sessions/`, `cache/`, or anything else under `~/.claude/`.
 
 ## On a new machine
 
 ```bash
+# 1. Clone the plugin
 git clone https://github.com/gagoar/claude-memory-sync.git ~/claude-memory-sync
+# (then register with Claude Code's plugin manager)
+
+# 2. Clone your backup repo
 git clone git@github.com:you/my-claude-memory.git ~/my-claude-memory
-cd ~/claude-memory-sync && node scripts/install.mjs --backup-repo=~/my-claude-memory
-node scripts/pull.mjs
+
+# 3. Wire them together and restore
+/memory-sync configure --backup-repo=~/my-claude-memory
+/memory-sync pull
 ```
 
-Every memory file from every project lands back in `~/.claude/projects/<project>/memory/`.
+Every memory file from every project lands back in `~/.claude/projects/<project>/memory/`, with the project keys automatically reconstructed for this machine's `$HOME`.
 
-## Cross-machine path differences
+## How HOME-relative storage works
 
-Claude encodes the absolute path of each project as the directory name under `~/.claude/projects/` — e.g. `-Users-gago-base-acme` for `/Users/gago/base/acme`. If your new machine has a different `$HOME` or you put a project at a different path, the directory names won't match.
+Claude encodes the absolute path of each project as the local directory name by replacing slashes with dashes — `/Users/gago/base/foo` becomes `-Users-gago-base-foo`. This means the original username is baked into the key.
 
-Two options:
+This plugin stores memories by their **suffix** — the encoded path *after* the current `$HOME` prefix — under `data/home-projects/<suffix>/memory/` in the backup repo. On pull, it prepends the new machine's `$HOME` prefix:
 
-1. **Recreate projects at the same paths on the new machine** (easiest — no rename needed).
-2. **Rename the backed-up directories** to match the new paths. Example: switching username `gago` → `german`:
+| Source | Path |
+|---|---|
+| Original local key (machine A) | `-Users-alice-base-foo` |
+| `$HOME` on machine A | `/Users/alice` → encoded `-Users-alice` |
+| Stored in repo as | `data/home-projects/base-foo/memory/...` |
+| `$HOME` on machine B | `/Users/bob` → encoded `-Users-bob` |
+| Restored local key (machine B) | `-Users-bob-base-foo` |
+| Lands at | `~/.claude/projects/-Users-bob-base-foo/memory/...` |
 
-   ```bash
-   cd ~/my-claude-memory/data/projects
-   for d in -Users-gago-*; do mv "$d" "${d/-Users-gago/-Users-german}"; done
-   cd ~/claude-memory-sync && node scripts/push.mjs   # commits the rename
-   node scripts/pull.mjs                              # populates new locations
-   ```
+Projects living outside `$HOME` (e.g. `/opt/foo`) are stored under `data/absolute-projects/-opt-foo/memory/` and restore only on machines that have the same absolute path. These are rare.
 
-## Repo layout (this tool)
+## Repo layout (this plugin)
 
 ```
 claude-memory-sync/
-├── SKILL.md             # Skill definition (symlinked to ~/.claude/skills/)
-├── README.md            # This file
-├── LICENSE              # MIT
-└── scripts/
-    ├── install.mjs      # First-time setup, takes --backup-repo
-    ├── push.mjs         # Local memory → backup repo
-    ├── pull.mjs         # Backup repo → local memory
-    ├── status.mjs       # Show drift
-    └── _lib.mjs         # Shared helpers
+├── .claude-plugin/
+│   └── plugin.json
+├── skills/
+│   └── memory-sync/
+│       └── SKILL.md
+├── scripts/
+│   ├── configure.mjs   # First-time setup, takes --backup-repo
+│   ├── push.mjs        # Local memory → backup repo
+│   ├── pull.mjs        # Backup repo → local memory
+│   ├── status.mjs      # Show drift
+│   ├── migrate.mjs     # One-time migration from older non-portable layout
+│   └── _lib.mjs        # Shared helpers
+├── README.md
+├── LICENSE
+└── .gitignore
 ```
 
 ## Backup repo layout (yours)
 
-After your first push, your backup repo will look like:
+After your first push:
 
 ```
 my-claude-memory/
 └── data/
-    └── projects/
-        └── -Users-<you>-<path>/
+    ├── home-projects/
+    │   └── <suffix>/             # e.g. base-foo, code-bar, etc.
+    │       └── memory/
+    │           ├── MEMORY.md
+    │           └── *.md
+    └── absolute-projects/        # only used if you have projects outside $HOME
+        └── -opt-foo/
             └── memory/
-                ├── MEMORY.md
-                └── *.md
 ```
-
-Mirrors the path-encoded structure Claude uses locally.
 
 ## Privacy
 
-- **The tool repo (this one) is public** and contains no user data — only scripts and the skill file.
-- **The backup repo is yours.** Pick a private repo if your memory ever contains project names, internal API hosts, user identifiers, etc. (which most do).
-- The tool never reads or writes anything outside `~/.claude/projects/*/memory/` and your chosen backup repo.
+- **This plugin repo is public**, contains no user data, MIT-licensed.
+- **The backup repo is yours.** Pick a private repo if your memory ever contains project names, internal API hosts, user identifiers, etc. (most do).
+- The tool never reads or writes outside `~/.claude/projects/*/memory/` and your chosen backup repo.
 
 ## License
 

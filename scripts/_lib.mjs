@@ -1,11 +1,22 @@
-// Shared helpers for push/pull/status.
+// Shared helpers for push/pull/status/configure.
 //
-// Resolves the backup destination repo from ~/.claude/memory-sync.config.json.
-// That config is written by install.mjs and points at any git checkout the
-// user wants to use as the memory data store (typically a private repo on
-// their own account, separate from this tool repo).
+// Storage layout in the backup repo:
+//   data/
+//     home-projects/<portable-id>/memory/   — projects under $HOME (portable)
+//     absolute-projects/<encoded>/memory/   — projects outside $HOME (non-portable)
+//
+// "portable-id" is the path-encoded Claude project key with the user's
+// $HOME prefix stripped. e.g.:
+//   local key:    "-Users-gago-base-BYOB-Sports-React-Native"
+//   $HOME prefix: "-Users-gago"
+//   portable-id:  "base-BYOB-Sports-React-Native"
+//
+// On pull from a different machine ($HOME=/Users/german), we prepend that
+// machine's home prefix:
+//   "-Users-german" + "-" + "base-BYOB-Sports-React-Native"
+//   = "-Users-german-base-BYOB-Sports-React-Native"
 
-import { readdir, stat, readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,13 +27,54 @@ export const TOOL_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const CONFIG_PATH = join(homedir(), '.claude', 'memory-sync.config.json');
 export const CLAUDE_PROJECTS = join(homedir(), '.claude', 'projects');
 
-// Read the install-time config. Throws with a helpful message if missing.
+// ───────────────────────────────────────────────────────────────
+// Path encoding helpers
+// ───────────────────────────────────────────────────────────────
+
+// Path-encode an absolute path the same way Claude does:
+// "/Users/gago/base/foo" → "-Users-gago-base-foo"
+export function encodeClaudePath(absPath) {
+  return absPath.replace(/\//g, '-');
+}
+
+// Current machine's $HOME in Claude's encoded form.
+export function homePrefix() {
+  return encodeClaudePath(homedir());
+}
+
+// Given an encoded local project key, classify it:
+//   - "home": project lives under $HOME. portableId is the encoded path
+//     *relative* to $HOME (e.g. "base-foo"), without a leading dash.
+//   - "absolute": project lives outside $HOME. portableId is the full
+//     encoded key (non-portable across machines with different layouts).
+export function toPortable(encodedKey, prefix = homePrefix()) {
+  if (encodedKey === prefix) {
+    return { kind: 'home', portableId: '' };
+  }
+  if (encodedKey.startsWith(prefix + '-')) {
+    return { kind: 'home', portableId: encodedKey.slice(prefix.length + 1) };
+  }
+  return { kind: 'absolute', portableId: encodedKey };
+}
+
+// Reverse of toPortable for the current machine.
+export function fromPortable(kind, portableId, prefix = homePrefix()) {
+  if (kind === 'home') {
+    return portableId ? `${prefix}-${portableId}` : prefix;
+  }
+  return portableId;
+}
+
+// ───────────────────────────────────────────────────────────────
+// Config loading
+// ───────────────────────────────────────────────────────────────
+
 export function loadConfig() {
   if (!existsSync(CONFIG_PATH)) {
     throw new Error(
       `config not found at ${CONFIG_PATH}.\n` +
-      `Run install first:\n` +
-      `  node ${join(TOOL_ROOT, 'scripts', 'install.mjs')} --backup-repo=/absolute/path/to/your/backup/repo`
+      `Run configure first:\n` +
+      `  node ${join(TOOL_ROOT, 'scripts', 'configure.mjs')} --backup-repo=/abs/path/to/your/backup/repo`
     );
   }
   const raw = readFileSync(CONFIG_PATH, 'utf8');
@@ -30,12 +82,12 @@ export function loadConfig() {
   try { cfg = JSON.parse(raw); }
   catch (e) { throw new Error(`config at ${CONFIG_PATH} is not valid JSON: ${e.message}`); }
   if (!cfg.backup_repo_path) {
-    throw new Error(`config at ${CONFIG_PATH} is missing "backup_repo_path". Re-run install.`);
+    throw new Error(`config at ${CONFIG_PATH} is missing "backup_repo_path". Re-run configure.`);
   }
   if (!existsSync(cfg.backup_repo_path)) {
     throw new Error(
       `backup repo path does not exist: ${cfg.backup_repo_path}\n` +
-      `Either clone it there, or re-run install with the correct --backup-repo=.`
+      `Either clone it there, or re-run configure with the correct --backup-repo=.`
     );
   }
   if (!existsSync(join(cfg.backup_repo_path, '.git'))) {
@@ -47,12 +99,15 @@ export function loadConfig() {
   return cfg;
 }
 
-// Compute the data directory inside the backup repo.
 export function dataDir(cfg) {
-  return join(cfg.backup_repo_path, 'data', 'projects');
+  return join(cfg.backup_repo_path, 'data');
 }
 
-// Discover all per-project memory directories on the local machine.
+// ───────────────────────────────────────────────────────────────
+// Project discovery
+// ───────────────────────────────────────────────────────────────
+
+// Local projects under ~/.claude/projects/*/memory/.
 export async function listLocalProjects(cfg) {
   if (!existsSync(CLAUDE_PROJECTS)) return [];
   const entries = await readdir(CLAUDE_PROJECTS, { withFileTypes: true });
@@ -61,35 +116,49 @@ export async function listLocalProjects(cfg) {
     if (!ent.isDirectory()) continue;
     const localMemoryDir = join(CLAUDE_PROJECTS, ent.name, 'memory');
     if (!existsSync(localMemoryDir)) continue;
+    const p = toPortable(ent.name);
+    const subdir = p.kind === 'home' ? 'home-projects' : 'absolute-projects';
+    const portableSlug = p.portableId || '__root__'; // edge case: project AT $HOME root
     out.push({
-      projectKey: ent.name,
+      localKey: ent.name,
+      portableKind: p.kind,
+      portableId: p.portableId,
       localMemoryDir,
-      repoMemoryDir: join(dataDir(cfg), ent.name, 'memory'),
+      repoMemoryDir: join(dataDir(cfg), subdir, portableSlug, 'memory'),
     });
   }
   return out;
 }
 
-// Discover all per-project memory directories in the backup repo.
+// Projects stored in the backup repo.
 export async function listRepoProjects(cfg) {
-  const dd = dataDir(cfg);
-  if (!existsSync(dd)) return [];
-  const entries = await readdir(dd, { withFileTypes: true });
   const out = [];
-  for (const ent of entries) {
-    if (!ent.isDirectory()) continue;
-    const repoMemoryDir = join(dd, ent.name, 'memory');
-    if (!existsSync(repoMemoryDir)) continue;
-    out.push({
-      projectKey: ent.name,
-      localMemoryDir: join(CLAUDE_PROJECTS, ent.name, 'memory'),
-      repoMemoryDir,
-    });
+  for (const [subdir, kind] of [['home-projects', 'home'], ['absolute-projects', 'absolute']]) {
+    const base = join(dataDir(cfg), subdir);
+    if (!existsSync(base)) continue;
+    const entries = await readdir(base, { withFileTypes: true });
+    for (const ent of entries) {
+      if (!ent.isDirectory()) continue;
+      const repoMemoryDir = join(base, ent.name, 'memory');
+      if (!existsSync(repoMemoryDir)) continue;
+      const portableId = ent.name === '__root__' ? '' : ent.name;
+      const localKey = fromPortable(kind, portableId);
+      out.push({
+        localKey,
+        portableKind: kind,
+        portableId,
+        localMemoryDir: join(CLAUDE_PROJECTS, localKey, 'memory'),
+        repoMemoryDir,
+      });
+    }
   }
   return out;
 }
 
-// Walk a directory and return relative-path → sha256 map of every file.
+// ───────────────────────────────────────────────────────────────
+// Fingerprinting + diffing
+// ───────────────────────────────────────────────────────────────
+
 export async function fingerprint(dir) {
   const map = new Map();
   if (!existsSync(dir)) return map;
@@ -113,16 +182,15 @@ async function walk(rootDir, currentDir, map) {
   }
 }
 
-// Diff two fingerprint maps. Returns { added, changed, removed, unchanged }.
-export function diff(localMap, repoMap) {
+export function diff(a, b) {
   const added = [], changed = [], removed = [], unchanged = [];
-  for (const [path, sha] of localMap) {
-    if (!repoMap.has(path)) added.push(path);
-    else if (repoMap.get(path) !== sha) changed.push(path);
-    else unchanged.push(path);
+  for (const [p, sha] of a) {
+    if (!b.has(p)) added.push(p);
+    else if (b.get(p) !== sha) changed.push(p);
+    else unchanged.push(p);
   }
-  for (const path of repoMap.keys()) {
-    if (!localMap.has(path)) removed.push(path);
+  for (const p of b.keys()) {
+    if (!a.has(p)) removed.push(p);
   }
   return { added, changed, removed, unchanged };
 }
