@@ -32,16 +32,43 @@ The skill will **ask you where to put your backup repo** (and offer to create a 
 
 | You type | What happens |
 |---|---|
-| `/memory-sync push` | Back up new/changed memory to your repo |
-| `/memory-sync pull` | Restore memory from your repo |
+| `/memory-sync push` | Back up new/changed memory + global config to your repo |
+| `/memory-sync pull` | Restore from your repo |
 | `/memory-sync status` | See what's drifted |
-| `/memory-sync list` | Show which projects are backed up |
+| `/memory-sync list` | Show projects and global files that are backed up |
 | `/memory-sync select` | Pick which projects to include (interactive checkboxes) |
+| `/memory-sync history` | Show recent backup commits — *what* was backed up *when* |
 | `/memory-sync configure --backup-repo=NEW` | Switch backup destination |
 
-`push` no-ops when nothing has changed. `pull` refuses to overwrite local changes that aren't in the backup unless `--force` is passed. Only `~/.claude/projects/*/memory/` is ever touched — nothing else under `~/.claude/`.
+`push` no-ops when nothing has changed. `pull` refuses to overwrite local changes that aren't in the backup unless `--force` is passed.
+
+### What's backed up
+
+- **Per-project memory** — `~/.claude/projects/*/memory/` (stored portably; works across usernames)
+- **Global config** — `~/.claude/CLAUDE.md`, `~/.claude/RTK.md`, `~/.claude/skills/`, `~/.claude/keybindings.json`
+
+Nothing else under `~/.claude/` is touched — never `settings.json`, sessions, cache, plugins, or anything else.
 
 ---
+
+## Updating the plugin
+
+When the plugin gains new features:
+
+```
+/plugin update claude-memory-sync@claude-memory-sync
+/reload-plugins
+```
+
+Or just refresh the marketplace + reinstall:
+
+```
+/plugin marketplace update claude-memory-sync
+/plugin update claude-memory-sync@claude-memory-sync
+/reload-plugins
+```
+
+Your `~/.claude/memory-sync.config.json` is preserved (the plugin manager only touches its own cache directory). Re-run `/memory-sync init` only if a release adds a new config field that needs your input.
 
 ## On a new computer
 

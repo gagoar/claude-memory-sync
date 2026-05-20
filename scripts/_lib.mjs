@@ -16,7 +16,7 @@
 //   "-Users-german" + "-" + "base-BYOB-Sports-React-Native"
 //   = "-Users-german-base-BYOB-Sports-React-Native"
 
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,8 +24,13 @@ import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 
 export const TOOL_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-export const CONFIG_PATH = join(homedir(), '.claude', 'memory-sync.config.json');
-export const CLAUDE_PROJECTS = join(homedir(), '.claude', 'projects');
+export const CLAUDE_HOME = join(homedir(), '.claude');
+export const CONFIG_PATH = join(CLAUDE_HOME, 'memory-sync.config.json');
+export const CLAUDE_PROJECTS = join(CLAUDE_HOME, 'projects');
+
+// Default files/dirs in ~/.claude/ that the global track covers.
+// Each entry is a path relative to ~/.claude/ — can be a file or a directory.
+export const DEFAULT_GLOBAL_FILES = ['CLAUDE.md', 'RTK.md', 'skills', 'keybindings.json'];
 
 // ───────────────────────────────────────────────────────────────
 // Path encoding helpers
@@ -101,6 +106,69 @@ export function loadConfig() {
 
 export function dataDir(cfg) {
   return join(cfg.backup_repo_path, 'data');
+}
+
+export function globalDataDir(cfg) {
+  return join(cfg.backup_repo_path, 'data', 'global');
+}
+
+// ───────────────────────────────────────────────────────────────
+// Global track: ~/.claude/CLAUDE.md, RTK.md, skills/, etc.
+// ───────────────────────────────────────────────────────────────
+
+export function globalEnabled(cfg) {
+  // Default: enabled. Explicit false in config disables.
+  return cfg?.global?.enabled !== false;
+}
+
+export function globalFileList(cfg) {
+  return cfg?.global?.files ?? DEFAULT_GLOBAL_FILES;
+}
+
+// For each configured global entry, return its local path + repo path + the
+// classification of where it currently exists. Entries that exist neither
+// locally nor in the repo are omitted.
+export async function listGlobalEntries(cfg) {
+  if (!globalEnabled(cfg)) return [];
+  const out = [];
+  for (const name of globalFileList(cfg)) {
+    const localPath = join(CLAUDE_HOME, name);
+    const repoPath  = join(globalDataDir(cfg), name);
+    let localKind = null, repoKind = null;
+    if (existsSync(localPath)) {
+      const st = await stat(localPath);
+      localKind = st.isDirectory() ? 'dir' : st.isFile() ? 'file' : null;
+    }
+    if (existsSync(repoPath)) {
+      const st = await stat(repoPath);
+      repoKind = st.isDirectory() ? 'dir' : st.isFile() ? 'file' : null;
+    }
+    if (!localKind && !repoKind) continue;
+    out.push({
+      name,
+      localPath,
+      repoPath,
+      kind: localKind ?? repoKind,           // canonical kind from whichever side has it
+      presence: localKind && repoKind ? 'both' : (localKind ? 'local' : 'repo'),
+    });
+  }
+  return out;
+}
+
+// Walk a file OR directory into a path → sha256 map. For a single file,
+// uses '' as the map key (so a one-entry map represents the file). For a
+// directory, falls through to fingerprint() which walks recursively.
+export async function fingerprintEntry(absPath) {
+  if (!existsSync(absPath)) return new Map();
+  const st = await stat(absPath);
+  if (st.isFile()) {
+    const buf = await readFile(absPath);
+    return new Map([['', createHash('sha256').update(buf).digest('hex')]]);
+  }
+  if (st.isDirectory()) {
+    return fingerprint(absPath);
+  }
+  return new Map();
 }
 
 // ───────────────────────────────────────────────────────────────

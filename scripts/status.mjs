@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // status.mjs — show what would change if you pushed or pulled. No mutation.
 
-import { loadConfig, listLocalProjects, listRepoProjects, fingerprint, diff } from './_lib.mjs';
+import { loadConfig, listLocalProjects, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled } from './_lib.mjs';
 
 async function main() {
   const cfg = loadConfig();
@@ -45,6 +45,31 @@ async function main() {
       if (pushDiff.removed.length) console.log(`  push would remove: ${pushDiff.removed.length} file(s) from repo`);
       if (pullDiff.added.length)   console.log(`  pull would add:    ${pullDiff.added.length} file(s) to local`);
       if (pullDiff.changed.length) console.log(`  pull would change: ${pullDiff.changed.length} file(s) in local`);
+    }
+  }
+
+  // Global track drift
+  if (globalEnabled(cfg)) {
+    const globals = await listGlobalEntries(cfg);
+    for (const g of globals) {
+      const localMap = await fingerprintEntry(g.localPath);
+      const repoMap  = await fingerprintEntry(g.repoPath);
+      const pushDiff = diff(localMap, repoMap);
+      const pullDiff = diff(repoMap, localMap);
+      if (
+        pushDiff.added.length || pushDiff.changed.length || pushDiff.removed.length ||
+        pullDiff.added.length || pullDiff.changed.length
+      ) {
+        any = true;
+        console.log(`[global:${g.name}]`);
+        if (g.presence === 'local') console.log('  repo:  MISSING (would be created on push)');
+        if (g.presence === 'repo')  console.log('  local: MISSING (would be created on pull)');
+        if (pushDiff.added.length)   console.log(`  push would add:    ${pushDiff.added.length} file(s)`);
+        if (pushDiff.changed.length) console.log(`  push would change: ${pushDiff.changed.length} file(s)`);
+        if (pushDiff.removed.length) console.log(`  push would remove: ${pushDiff.removed.length} file(s) from repo`);
+        if (pullDiff.added.length)   console.log(`  pull would add:    ${pullDiff.added.length} file(s) to local`);
+        if (pullDiff.changed.length) console.log(`  pull would change: ${pullDiff.changed.length} file(s) in local`);
+      }
     }
   }
 

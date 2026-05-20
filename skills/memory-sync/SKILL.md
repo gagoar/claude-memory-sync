@@ -25,7 +25,8 @@ The user invokes one of:
 | `select` | **Interactive project selection.** Drive a multi-select via AskUserQuestion; apply the result through `configure`. See "Select mode" below. |
 | `push` | Local memory → backup repo (only selected projects). Run `node $SCRIPTS/push.mjs`. |
 | `pull` | Backup repo → local memory (only selected projects). Run `node $SCRIPTS/pull.mjs`. Accepts `--force` to overwrite local-only files. |
-| `status` | Show what's drifted between local and repo (only selected projects). Run `node $SCRIPTS/status.mjs`. No mutation. |
+| `status` | Show what's drifted between local and repo (only selected projects + global track). Run `node $SCRIPTS/status.mjs`. No mutation. |
+| `history` | Show recent backup commits with timestamps and what each one changed. Flags: `--limit=N`, `--since=TIME`, `--paths`. Run `node $SCRIPTS/history.mjs <flags>`. No mutation. |
 | `migrate` | One-time migration from an older non-portable layout. Run `node $SCRIPTS/migrate.mjs`. |
 
 **Auto-route to `init` on first contact — this is the most important behavior of this skill.** If `~/.claude/memory-sync.config.json` does not exist (or its `backup_repo_path` field is missing, or that path doesn't resolve to a real git repo) and the user invokes ANY mode at all — including just `/memory-sync` with no args, or natural-language phrases like "back up my memory" — run `init` FIRST. Do not ask the user "what do you want to do?" beforehand. Do not run any push/pull/list/status until init has completed. The presence of a valid config is the only signal that init has already happened.
@@ -133,6 +134,19 @@ If init was auto-triggered because the user invoked `/memory-sync push` (or pull
 Storage in the backup repo is HOME-relative. A project at `/Users/alice/code/foo` on machine A is stored under `data/home-projects/code-foo/` in the repo. On machine B with `$HOME=/Users/bob`, pull reconstructs the local key as `-Users-bob-code-foo` and lands the files at `~/.claude/projects/-Users-bob-code-foo/memory/`. The user does not need to do any manual renaming.
 
 Projects outside `$HOME` (rare) are stored under `data/absolute-projects/` with the full encoded path and only restore correctly on machines that have the same absolute path.
+
+## Global track
+
+Alongside per-project memory, the plugin also backs up global Claude Code config files that live directly under `~/.claude/`:
+
+- `~/.claude/CLAUDE.md` — user-wide behavioral instructions
+- `~/.claude/RTK.md` — referenced from CLAUDE.md
+- `~/.claude/skills/` — user-authored skills (NOT plugin-shipped skills)
+- `~/.claude/keybindings.json` — custom keyboard shortcuts
+
+Stored at `data/global/` in the backup repo. Each file/directory is backed up if it exists locally; missing files are skipped. Configured via `cfg.global.files` (default: the four listed above) and `cfg.global.enabled` (default true). Pull/push/status all include the global track.
+
+Symlinks within `~/.claude/skills/` are NOT followed — only regular files are backed up.
 
 ## Reporting
 

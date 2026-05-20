@@ -23,7 +23,7 @@
 //     ]
 //   }
 
-import { loadConfig, listLocalProjects, listRepoProjects } from './_lib.mjs';
+import { loadConfig, listLocalProjects, listRepoProjects, listGlobalEntries, globalEnabled, globalFileList } from './_lib.mjs';
 
 const args = new Set(process.argv.slice(2));
 const JSON_MODE = args.has('--json');
@@ -49,6 +49,7 @@ async function main() {
 
   if (JSON_MODE) {
     const sel = cfg.projects ?? {};
+    const globals = globalEnabled(cfg) ? await listGlobalEntries(cfg) : [];
     const payload = {
       backup_repo_path: cfg.backup_repo_path,
       include: sel.include ?? [],
@@ -61,6 +62,15 @@ async function main() {
         hasLocal:     !!p.hasLocal,
         hasRepo:      !!p.hasRepo,
       })),
+      global: {
+        enabled: globalEnabled(cfg),
+        files:   globalFileList(cfg),
+        entries: globals.map(g => ({
+          name:     g.name,
+          kind:     g.kind,
+          presence: g.presence,
+        })),
+      },
     };
     process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
     return;
@@ -90,10 +100,35 @@ async function main() {
     console.log(`  ${state}  ${kind}  ${where}  ${portableId}`);
   }
 
+  // Global track section
+  if (globalEnabled(cfg)) {
+    const globals = await listGlobalEntries(cfg);
+    if (globals.length > 0) {
+      console.log('');
+      console.log(`global track:  enabled (files: ${JSON.stringify(globalFileList(cfg))})`);
+      console.log('  WHERE   NAME');
+      console.log('  ──────  ──────────────────────────────────────');
+      for (const g of globals) {
+        const where =
+          g.presence === 'both'   ? 'both  '
+            : g.presence === 'local'  ? 'local '
+            : 'repo  ';
+        console.log(`  ${where}  ~/.claude/${g.name}${g.kind === 'dir' ? '/' : ''}`);
+      }
+    } else {
+      console.log('');
+      console.log('global track:  enabled but no files match (none exist locally or in repo)');
+    }
+  } else {
+    console.log('');
+    console.log('global track:  disabled');
+  }
+
   console.log('');
-  console.log('Interactive selection:  /memory-sync select   (from inside Claude Code)');
-  console.log('Exclude one:            node scripts/configure.mjs --exclude=PORTABLE-ID');
-  console.log('Include only some:      node scripts/configure.mjs --reset-projects --include=PATTERN [--include=...]');
+  console.log('Interactive project selection:  /memory-sync select   (from inside Claude Code)');
+  console.log('Exclude one:                    node scripts/configure.mjs --exclude=PORTABLE-ID');
+  console.log('Include only some:              node scripts/configure.mjs --reset-projects --include=PATTERN');
+  console.log('See backup history (when):      /memory-sync history');
 }
 
 main().catch(err => { console.error(err.message || err); process.exit(1); });

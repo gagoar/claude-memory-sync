@@ -12,7 +12,7 @@
 import { cp, mkdir, rm } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { loadConfig, listRepoProjects, fingerprint, diff } from './_lib.mjs';
+import { loadConfig, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled } from './_lib.mjs';
 
 const args = new Set(process.argv.slice(2));
 const FORCE = args.has('--force');
@@ -104,6 +104,54 @@ async function main() {
     totals.removed  += FORCE ? d.removed.length : 0;
     totals.unchanged += d.unchanged.length;
     console.log(`[${proj.localKey}] +${d.added.length} ~${d.changed.length} -${FORCE ? d.removed.length : 0}`);
+  }
+
+  // Global track: pull ~/.claude/CLAUDE.md, RTK.md, skills/, etc. from repo.
+  if (globalEnabled(cfg)) {
+    const globals = await listGlobalEntries(cfg);
+    for (const g of globals) {
+      if (g.presence === 'local') continue; // local-only — never created in repo, leave it
+      const localMap = await fingerprintEntry(g.localPath);
+      const repoMap  = await fingerprintEntry(g.repoPath);
+      // Pre-check: refuse to overwrite local changes that aren't in the repo
+      if (!FORCE) {
+        const wouldClobber = [];
+        for (const [p, sha] of localMap) {
+          if (!repoMap.has(p)) wouldClobber.push({ p, kind: 'local-only' });
+          else if (repoMap.get(p) !== sha) wouldClobber.push({ p, kind: 'differs' });
+        }
+        if (wouldClobber.length) {
+          console.error(`error: local copy of [global:${g.name}] has changes the backup repo lacks. Pull would lose them.`);
+          for (const w of wouldClobber) {
+            const path = w.p === '' ? g.localPath : `${g.localPath}/${w.p}`;
+            console.error(`    ${w.kind.padEnd(11)} ${path}`);
+          }
+          console.error('  Run `node scripts/push.mjs` first, or re-run pull with --force to overwrite.');
+          process.exit(2);
+        }
+      }
+      const d = diff(repoMap, localMap);
+      if (d.added.length === 0 && d.changed.length === 0 && d.removed.length === 0) {
+        totals.unchanged += d.unchanged.length;
+        continue;
+      }
+      for (const f of [...d.added, ...d.changed]) {
+        const src = f === '' ? g.repoPath : join(g.repoPath, f);
+        const dst = f === '' ? g.localPath : join(g.localPath, f);
+        await mkdir(dirname(dst), { recursive: true });
+        await cp(src, dst);
+      }
+      if (FORCE) {
+        for (const f of d.removed) {
+          await rm(f === '' ? g.localPath : join(g.localPath, f), { recursive: true });
+        }
+      }
+      totals.added    += d.added.length;
+      totals.changed  += d.changed.length;
+      totals.removed  += FORCE ? d.removed.length : 0;
+      totals.unchanged += d.unchanged.length;
+      console.log(`[global:${g.name}] +${d.added.length} ~${d.changed.length} -${FORCE ? d.removed.length : 0}`);
+    }
   }
 
   console.log(`\n✓ pull complete. +${totals.added} ~${totals.changed} -${totals.removed} (${totals.unchanged} unchanged)`);
