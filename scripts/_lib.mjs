@@ -104,11 +104,46 @@ export function dataDir(cfg) {
 }
 
 // ───────────────────────────────────────────────────────────────
+// Selection: per-project include / exclude glob patterns
+// ───────────────────────────────────────────────────────────────
+//
+// cfg.projects = { include: ["*"], exclude: ["temp-*"] }
+//
+// Defaults: include = ["*"] (everything), exclude = [] (nothing).
+// A project is selected iff its portable id matches ANY include pattern
+// AND does NOT match any exclude pattern. Patterns operate on the portable
+// id (for home-projects, the suffix; for absolute-projects, the full
+// encoded path). The single-segment wildcard "*" matches any characters.
+
+function globToRegex(pattern) {
+  // Escape regex specials except *, then convert * → .*
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  return new RegExp('^' + escaped + '$');
+}
+
+function matchesAny(id, patterns) {
+  if (!patterns || patterns.length === 0) return false;
+  return patterns.some(p => globToRegex(p).test(id));
+}
+
+export function isProjectSelected(portableId, cfg) {
+  const sel = cfg?.projects ?? {};
+  const include = (sel.include && sel.include.length) ? sel.include : ['*'];
+  const exclude = sel.exclude ?? [];
+  return matchesAny(portableId, include) && !matchesAny(portableId, exclude);
+}
+
+// ───────────────────────────────────────────────────────────────
 // Project discovery
 // ───────────────────────────────────────────────────────────────
 
 // Local projects under ~/.claude/projects/*/memory/.
-export async function listLocalProjects(cfg) {
+//
+// By default returns ONLY projects that pass cfg.projects include/exclude
+// filtering. Pass { includeFiltered: true } to also include excluded
+// entries (each tagged with .selected: false) — useful for the `list`
+// command. The push/pull/status code paths always use the filtered form.
+export async function listLocalProjects(cfg, opts = {}) {
   if (!existsSync(CLAUDE_PROJECTS)) return [];
   const entries = await readdir(CLAUDE_PROJECTS, { withFileTypes: true });
   const out = [];
@@ -118,20 +153,25 @@ export async function listLocalProjects(cfg) {
     if (!existsSync(localMemoryDir)) continue;
     const p = toPortable(ent.name);
     const subdir = p.kind === 'home' ? 'home-projects' : 'absolute-projects';
-    const portableSlug = p.portableId || '__root__'; // edge case: project AT $HOME root
+    const portableSlug = p.portableId || '__root__';
+    const selected = isProjectSelected(p.portableId || '__root__', cfg);
+    if (!selected && !opts.includeFiltered) continue;
     out.push({
       localKey: ent.name,
       portableKind: p.kind,
       portableId: p.portableId,
       localMemoryDir,
       repoMemoryDir: join(dataDir(cfg), subdir, portableSlug, 'memory'),
+      selected,
     });
   }
   return out;
 }
 
 // Projects stored in the backup repo.
-export async function listRepoProjects(cfg) {
+//
+// Same filtering semantics as listLocalProjects.
+export async function listRepoProjects(cfg, opts = {}) {
   const out = [];
   for (const [subdir, kind] of [['home-projects', 'home'], ['absolute-projects', 'absolute']]) {
     const base = join(dataDir(cfg), subdir);
@@ -143,10 +183,13 @@ export async function listRepoProjects(cfg) {
       if (!existsSync(repoMemoryDir)) continue;
       const portableId = ent.name === '__root__' ? '' : ent.name;
       const localKey = fromPortable(kind, portableId);
+      const selected = isProjectSelected(ent.name, cfg);
+      if (!selected && !opts.includeFiltered) continue;
       out.push({
         localKey,
         portableKind: kind,
         portableId,
+        selected,
         localMemoryDir: join(CLAUDE_PROJECTS, localKey, 'memory'),
         repoMemoryDir,
       });

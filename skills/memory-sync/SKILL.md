@@ -1,6 +1,6 @@
 ---
 name: memory-sync
-description: Push, pull, configure, or check sync status of Claude Code per-project memory between this machine and the user's configured backup git repo. Storage is HOME-relative so memories restore correctly on any machine. Trigger when the user invokes /memory-sync (with mode push, pull, status, configure) or says "backup my memory", "sync memory", "pull memory", "restore memory on this machine", or "set up memory backup".
+description: Push, pull, configure, or list Claude Code per-project memory between this machine and the user's configured backup git repo. Supports per-project include/exclude selection and HOME-relative storage so memories restore correctly on any machine. Trigger when the user invokes /memory-sync (with mode push, pull, status, list, configure, migrate) or says "backup my memory", "sync memory", "pull memory", "restore memory on this machine", "which projects do I back up", or "set up memory backup".
 ---
 
 # Memory Sync
@@ -19,13 +19,16 @@ The user invokes one of:
 
 | Mode | Action |
 |---|---|
-| `configure` | First-time setup or switch destination. Args: `--backup-repo=/abs/path`. Run `node $SCRIPTS/configure.mjs --backup-repo=...`. |
-| `push` | Local memory → backup repo. Run `node $SCRIPTS/push.mjs`. |
-| `pull` | Backup repo → local memory. Run `node $SCRIPTS/pull.mjs`. Accepts `--force` to overwrite local-only files. |
-| `status` | Show what's drifted between local and repo. Run `node $SCRIPTS/status.mjs`. No mutation. |
+| `configure` | First-time setup, switch destination, or update project selection. Flags: `--backup-repo=/abs/path`, `--include=PATTERN` (append to include list), `--exclude=PATTERN` (append to exclude list), `--reset-projects` (clear both lists). Run `node $SCRIPTS/configure.mjs <flags>`. |
+| `list` | Show every known project (local and repo) with its selection state, kind, and where its data lives. No mutation. Run `node $SCRIPTS/list.mjs`. |
+| `push` | Local memory → backup repo (only selected projects). Run `node $SCRIPTS/push.mjs`. |
+| `pull` | Backup repo → local memory (only selected projects). Run `node $SCRIPTS/pull.mjs`. Accepts `--force` to overwrite local-only files. |
+| `status` | Show what's drifted between local and repo (only selected projects). Run `node $SCRIPTS/status.mjs`. No mutation. |
 | `migrate` | One-time migration from an older non-portable layout. Run `node $SCRIPTS/migrate.mjs`. |
 
 If the user didn't specify a mode, ask via AskUserQuestion. **Don't guess between push and pull** — they are not reversible without thought.
+
+When the user says "which projects am I backing up" / "show what's selected" / "list my projects", invoke `list`. When they say "stop backing up X" / "exclude X" / "only back up X", invoke `configure` with the appropriate `--include` or `--exclude` patterns. Patterns are globs operating on the portable id (`*` is the wildcard); confirm the resulting list with the user via AskUserQuestion if the change would substantially shrink or expand the set.
 
 ## First-time setup
 

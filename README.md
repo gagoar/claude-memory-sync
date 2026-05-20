@@ -58,13 +58,40 @@ This writes `~/.claude/memory-sync.config.json`. Re-run any time to switch desti
 | Back up new memory | `/memory-sync push` | `node $PLUGIN/scripts/push.mjs` |
 | Restore on a new machine | `/memory-sync pull` | `node $PLUGIN/scripts/pull.mjs` |
 | See what's drifted | `/memory-sync status` | `node $PLUGIN/scripts/status.mjs` |
+| List projects + selection state | `/memory-sync list` | `node $PLUGIN/scripts/list.mjs` |
 | Switch destination | `/memory-sync configure --backup-repo=NEW` | `node $PLUGIN/scripts/configure.mjs --backup-repo=NEW` |
+| Exclude a project | `/memory-sync configure --exclude=PATTERN` | `node $PLUGIN/scripts/configure.mjs --exclude=PATTERN` |
+| Limit to specific projects | `/memory-sync configure --reset-projects --include=PATTERN` | `node $PLUGIN/scripts/configure.mjs --reset-projects --include=PATTERN` |
 | Migrate older non-portable layout | `/memory-sync migrate` | `node $PLUGIN/scripts/migrate.mjs` |
 
 Notes:
 - `push.mjs` no-ops cleanly when nothing has changed.
 - `pull.mjs` refuses to overwrite local files that the backup repo lacks unless `--force` is passed.
 - Both `push` and `pull` only touch `~/.claude/projects/*/memory/` and your configured backup repo. Never `settings.local.json`, `sessions/`, `cache/`, or anything else under `~/.claude/`.
+
+## Per-project selection
+
+By default every project under `~/.claude/projects/*/memory/` is backed up. To restrict the set, edit `~/.claude/memory-sync.config.json` or use `configure` flags. Patterns are simple globs (`*` is the wildcard) operating on the **portable id** (the suffix shown by `/memory-sync list`).
+
+```bash
+# Back up only projects matching base-* (e.g. base-foo, base-bar)
+node scripts/configure.mjs --reset-projects --include='base-*'
+
+# Back up everything EXCEPT one project
+node scripts/configure.mjs --exclude=base-throwaway
+
+# Back up everything except all temp-* projects
+node scripts/configure.mjs --exclude='temp-*'
+
+# Reset back to "include all"
+node scripts/configure.mjs --reset-projects
+```
+
+A project is selected iff its portable id matches **any** include pattern AND does **not** match any exclude pattern. An empty include list defaults to "include all."
+
+`/memory-sync list` always shows the full picture — included projects, excluded projects, projects present only locally, and projects present only in the repo — so you can confirm changes before push/pull.
+
+Already-pushed data for a project you later add to `--exclude` stays in the backup repo (no implicit deletion). If you want to remove it, delete it manually in the backup repo or open the data dir and `git rm` it.
 
 ## On a new machine
 
