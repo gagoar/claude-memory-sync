@@ -21,6 +21,7 @@ The user invokes one of:
 |---|---|
 | `configure` | First-time setup, switch destination, or update project selection. Flags: `--backup-repo=/abs/path`, `--include=PATTERN` (append to include list), `--exclude=PATTERN` (append to exclude list), `--reset-projects` (clear both lists). Run `node $SCRIPTS/configure.mjs <flags>`. |
 | `list` | Show every known project (local and repo) with its selection state, kind, and where its data lives. No mutation. Run `node $SCRIPTS/list.mjs`. |
+| `select` | **Interactive selection.** Drive a multi-select via AskUserQuestion; apply the result through `configure`. See "Select mode" below. |
 | `push` | Local memory → backup repo (only selected projects). Run `node $SCRIPTS/push.mjs`. |
 | `pull` | Backup repo → local memory (only selected projects). Run `node $SCRIPTS/pull.mjs`. Accepts `--force` to overwrite local-only files. |
 | `status` | Show what's drifted between local and repo (only selected projects). Run `node $SCRIPTS/status.mjs`. No mutation. |
@@ -28,7 +29,41 @@ The user invokes one of:
 
 If the user didn't specify a mode, ask via AskUserQuestion. **Don't guess between push and pull** — they are not reversible without thought.
 
-When the user says "which projects am I backing up" / "show what's selected" / "list my projects", invoke `list`. When they say "stop backing up X" / "exclude X" / "only back up X", invoke `configure` with the appropriate `--include` or `--exclude` patterns. Patterns are globs operating on the portable id (`*` is the wildcard); confirm the resulting list with the user via AskUserQuestion if the change would substantially shrink or expand the set.
+When the user says "which projects am I backing up" / "show what's selected" / "list my projects", invoke `list`. When they say "let me pick projects" / "select projects to back up" / "choose what to sync", invoke `select`. When they say "stop backing up X" / "exclude X" / "only back up X", you can use `configure` directly with the appropriate `--include` or `--exclude` patterns — but for anything beyond one or two projects, **prefer `select`** because the UI is clearer.
+
+## Select mode (interactive)
+
+When the user invokes `select` (or asks for a "fancy" / "interactive" / "pick" selection):
+
+1. **Read current state.** Run `node $SCRIPTS/list.mjs --json` and parse the output. It returns:
+   ```json
+   {
+     "backup_repo_path": "...",
+     "include": [...patterns],
+     "exclude": [...patterns],
+     "projects": [
+       { "localKey": "...", "portableId": "base-foo", "portableKind": "home",
+         "selected": true, "hasLocal": true, "hasRepo": true },
+       ...
+     ]
+   }
+   ```
+
+2. **Size-check.** AskUserQuestion supports up to 4 questions per call, each with 2-4 options — i.e. up to 16 projects in one round-trip. If the project count fits:
+   - Group projects into questions of up to 4 options each (no more than 4 questions in the same call).
+   - Use `multiSelect: true`.
+   - Phrase each question like *"Which of these projects should be backed up? (Currently selected: A, C.)"* and label each option with the portable id, plus a short description that includes its current state (`included` / `excluded` / `local-only` / `repo-only`) so the user knows what they're toggling.
+
+3. **Above 16 projects** (rare): explain the limit briefly, then ask a single free-text question for a glob pattern (e.g. `base-*`) and run `configure --reset-projects --include=PATTERN [--include=...]` with the answer.
+
+4. **Apply the answer:**
+   - User selected ALL projects → `node $SCRIPTS/configure.mjs --reset-projects` (defaults back to include-all).
+   - User selected a subset → `node $SCRIPTS/configure.mjs --reset-projects --include=ID1 --include=ID2 ...` (one `--include` per chosen portable id).
+   - User selected NONE → confirm with a second AskUserQuestion before disabling everything; if confirmed, `--reset-projects --exclude='*'`.
+
+5. **Confirm by re-running list.** After `configure` exits, run `node $SCRIPTS/list.mjs` (without `--json`) and relay the human-readable output verbatim so the user sees the new state.
+
+Never edit `~/.claude/memory-sync.config.json` directly — always go through `configure.mjs` so validation runs.
 
 ## First-time setup
 

@@ -59,6 +59,7 @@ This writes `~/.claude/memory-sync.config.json`. Re-run any time to switch desti
 | Restore on a new machine | `/memory-sync pull` | `node $PLUGIN/scripts/pull.mjs` |
 | See what's drifted | `/memory-sync status` | `node $PLUGIN/scripts/status.mjs` |
 | List projects + selection state | `/memory-sync list` | `node $PLUGIN/scripts/list.mjs` |
+| **Interactive select** (multi-checkbox UI) | `/memory-sync select` | _(skill-driven; no terminal equivalent)_ |
 | Switch destination | `/memory-sync configure --backup-repo=NEW` | `node $PLUGIN/scripts/configure.mjs --backup-repo=NEW` |
 | Exclude a project | `/memory-sync configure --exclude=PATTERN` | `node $PLUGIN/scripts/configure.mjs --exclude=PATTERN` |
 | Limit to specific projects | `/memory-sync configure --reset-projects --include=PATTERN` | `node $PLUGIN/scripts/configure.mjs --reset-projects --include=PATTERN` |
@@ -71,7 +72,13 @@ Notes:
 
 ## Per-project selection
 
-By default every project under `~/.claude/projects/*/memory/` is backed up. To restrict the set, edit `~/.claude/memory-sync.config.json` or use `configure` flags. Patterns are simple globs (`*` is the wildcard) operating on the **portable id** (the suffix shown by `/memory-sync list`).
+By default every project under `~/.claude/projects/*/memory/` is backed up. To restrict the set you have three options:
+
+- **Interactive (recommended):** in Claude Code, run `/memory-sync select`. The skill reads the current state, asks you to multi-select projects via Claude Code's native question UI, and applies the result for you. Up to 16 projects fit in a single round-trip; for larger sets the skill falls back to asking for a glob.
+- **CLI flags:** use `configure --include=PATTERN` or `configure --exclude=PATTERN` to update one at a time.
+- **JSON edit:** open `~/.claude/memory-sync.config.json` and edit `projects.include` / `projects.exclude` directly.
+
+Patterns are simple globs (`*` is the wildcard) operating on the **portable id** (the suffix shown by `/memory-sync list`).
 
 ```bash
 # Back up only projects matching base-* (e.g. base-foo, base-bar)

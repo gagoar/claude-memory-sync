@@ -1,17 +1,32 @@
 #!/usr/bin/env node
 // list.mjs — list all known projects and their selection state.
 //
-// Shows every project that exists EITHER locally
-// (~/.claude/projects/*/memory/) OR in the backup repo, along with:
-//   - portable id
-//   - kind (home / absolute)
-//   - whether it's currently selected by cfg.projects.include / .exclude
-//   - whether the data is present locally, in the repo, or both
+// Default output is human-readable. Pass --json for a machine-readable
+// payload that the `/memory-sync select` skill mode uses to drive an
+// interactive multi-select via AskUserQuestion.
 //
-// Use this to decide what to add to --exclude or to confirm a fresh
-// selection covers what you expect.
+// JSON shape:
+//   {
+//     "backup_repo_path": "/abs/path",
+//     "include": [...patterns],
+//     "exclude": [...patterns],
+//     "projects": [
+//       {
+//         "localKey":     "-Users-gago-base-foo",
+//         "portableId":   "base-foo",
+//         "portableKind": "home" | "absolute",
+//         "selected":     true | false,
+//         "hasLocal":     true | false,
+//         "hasRepo":      true | false
+//       },
+//       ...
+//     ]
+//   }
 
-import { loadConfig, listLocalProjects, listRepoProjects, isProjectSelected } from './_lib.mjs';
+import { loadConfig, listLocalProjects, listRepoProjects } from './_lib.mjs';
+
+const args = new Set(process.argv.slice(2));
+const JSON_MODE = args.has('--json');
 
 async function main() {
   const cfg = loadConfig();
@@ -21,11 +36,34 @@ async function main() {
 
   const all = new Map();
   for (const p of local) {
-    all.set(p.localKey, { ...p, hasLocal: true });
+    all.set(p.localKey, { ...p, hasLocal: true, hasRepo: false });
   }
   for (const p of repo) {
-    const prev = all.get(p.localKey) ?? {};
+    const prev = all.get(p.localKey) ?? { hasLocal: false };
     all.set(p.localKey, { ...prev, ...p, hasRepo: true });
+  }
+
+  const rows = [...all.values()].sort((a, b) =>
+    (a.portableId || '').localeCompare(b.portableId || '')
+  );
+
+  if (JSON_MODE) {
+    const sel = cfg.projects ?? {};
+    const payload = {
+      backup_repo_path: cfg.backup_repo_path,
+      include: sel.include ?? [],
+      exclude: sel.exclude ?? [],
+      projects: rows.map(p => ({
+        localKey:     p.localKey,
+        portableId:   p.portableId ?? '',
+        portableKind: p.portableKind,
+        selected:     p.selected !== false,
+        hasLocal:     !!p.hasLocal,
+        hasRepo:      !!p.hasRepo,
+      })),
+    };
+    process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+    return;
   }
 
   if (all.size === 0) {
@@ -41,7 +79,6 @@ async function main() {
   console.log('  STATE  KIND      WHERE   PORTABLE-ID');
   console.log('  ─────  ────────  ──────  ──────────────────────────────────────');
 
-  const rows = [...all.values()].sort((a, b) => (a.portableId || '').localeCompare(b.portableId || ''));
   for (const p of rows) {
     const portableId = p.portableId === '' ? '(at $HOME root)' : (p.portableId || '__missing__');
     const state = p.selected === false ? 'EXCL ' : 'incl ';
@@ -54,8 +91,9 @@ async function main() {
   }
 
   console.log('');
-  console.log('To exclude a project:  node scripts/configure.mjs --exclude=PORTABLE-ID');
-  console.log('To include only some:  node scripts/configure.mjs --reset-projects --include=PATTERN [--include=...]');
+  console.log('Interactive selection:  /memory-sync select   (from inside Claude Code)');
+  console.log('Exclude one:            node scripts/configure.mjs --exclude=PORTABLE-ID');
+  console.log('Include only some:      node scripts/configure.mjs --reset-projects --include=PATTERN [--include=...]');
 }
 
 main().catch(err => { console.error(err.message || err); process.exit(1); });
