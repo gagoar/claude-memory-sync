@@ -30,7 +30,10 @@ export const CLAUDE_PROJECTS = join(CLAUDE_HOME, 'projects');
 
 // Default files/dirs in ~/.claude/ that the global track covers.
 // Each entry is a path relative to ~/.claude/ — can be a file or a directory.
-export const DEFAULT_GLOBAL_FILES = ['CLAUDE.md', 'RTK.md', 'skills', 'keybindings.json'];
+// settings.json carries defaultMode, tool allowlist, skipAutoPermissionPrompt —
+// essential to avoid re-accepting every permission on a new machine.
+// settings.local.json is intentionally excluded (may contain secrets/tokens).
+export const DEFAULT_GLOBAL_FILES = ['CLAUDE.md', 'RTK.md', 'skills', 'keybindings.json', 'settings.json'];
 
 // ───────────────────────────────────────────────────────────────
 // Path encoding helpers
