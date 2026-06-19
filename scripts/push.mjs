@@ -15,7 +15,7 @@ import { cp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { loadConfig, listLocalProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, extractSyncableSettings, portablizeSettings, extractStatusLineScript, CLAUDE_HOME } from './_lib.mjs';
+import { loadConfig, listLocalProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, extractSyncableSettings, portablizeSettings, analyzeStatusLineCommand, CLAUDE_HOME } from './_lib.mjs';
 
 const args = new Set(process.argv.slice(2));
 const NO_PUSH = args.has('--no-push');
@@ -122,8 +122,13 @@ async function main() {
         }
 
         // If statusLine references a script under ~/.claude/, back it up too.
-        // Use the portablized command (has '~') so extractStatusLineScript matches correctly.
-        const scriptRel = extractStatusLineScript(perms.statusLine?.command);
+        // Warn about external paths (plugins, system binaries) that can't travel.
+        const { localScript: scriptRel, externalDeps } = analyzeStatusLineCommand(perms.statusLine?.command);
+        for (const dep of externalDeps) {
+          console.warn(`⚠ statusLine references external path: ${dep}`);
+          console.warn('  This path won\'t exist on other machines unless that tool is installed there.');
+          console.warn('  It won\'t be backed up — install it on each machine separately.');
+        }
         if (scriptRel) {
           const scriptSrc  = join(CLAUDE_HOME, scriptRel);
           const scriptDest = join(globalDataDir(cfg), scriptRel);

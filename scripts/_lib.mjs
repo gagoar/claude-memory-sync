@@ -64,16 +64,40 @@ export function localizeSettings(obj) {
   return JSON.parse(JSON.stringify(obj).split('~').join(homedir()));
 }
 
-// Parse a shell command string and return the path of any script that lives
-// under ~/.claude/, relative to ~/.claude/. Returns null if none found.
-// e.g. "bash ~/.claude/statusline-byob.sh" → "statusline-byob.sh"
-export function extractStatusLineScript(command) {
-  if (!command) return null;
-  const prefix = '~/.claude/';
+// Parse a shell command and classify every path token:
+//   localScript  — single path under ~/.claude/ (relative to ~/.claude/)
+//   externalDeps — absolute paths NOT under ~/.claude/ (e.g. /usr/local/bin/foo)
+//
+// Bare commands (bash, node, rtk, …) and flags are ignored — they're system
+// tools expected to exist everywhere.
+//
+// Call this on the PORTABLIZED command (home replaced with '~') so the
+// ~/.claude/ prefix is always present regardless of machine.
+//
+// e.g. "bash ~/.claude/statusline-byob.sh" → { localScript: "statusline-byob.sh", externalDeps: [] }
+// e.g. "/usr/local/bin/mybar"              → { localScript: null, externalDeps: ["/usr/local/bin/mybar"] }
+const INTERPRETERS = new Set(['bash', 'sh', 'zsh', 'fish', 'node', 'python', 'python3', 'ruby', 'perl']);
+
+export function analyzeStatusLineCommand(command) {
+  if (!command) return { localScript: null, externalDeps: [] };
+  let localScript = null;
+  const externalDeps = [];
   for (const token of command.split(/\s+/)) {
-    if (token.startsWith(prefix)) return token.slice(prefix.length);
+    if (!token || token.startsWith('-')) continue;
+    if (INTERPRETERS.has(token.split('/').pop())) continue;
+    if (token.startsWith('~/.claude/')) {
+      localScript = token.slice('~/.claude/'.length);
+    } else if (token.startsWith('/') || token.startsWith('~/')) {
+      externalDeps.push(token);
+    }
+    // bare relative commands (rtk, node via PATH, etc.) — system tool, skip
   }
-  return null;
+  return { localScript, externalDeps };
+}
+
+// Back-compat: callers that only need the local script path.
+export function extractStatusLineScript(command) {
+  return analyzeStatusLineCommand(command).localScript;
 }
 
 // ───────────────────────────────────────────────────────────────

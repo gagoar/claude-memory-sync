@@ -6,7 +6,7 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadConfig, listLocalProjects, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, extractSyncableSettings, localizeSettings } from './_lib.mjs';
+import { loadConfig, listLocalProjects, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, extractSyncableSettings, localizeSettings, analyzeStatusLineCommand, CLAUDE_HOME } from './_lib.mjs';
 
 async function main() {
   const cfg = loadConfig();
@@ -118,6 +118,33 @@ async function main() {
       }
     }
     syncStates.push(permsDrift ? 'settings.permissions(!)' : 'settings.permissions(✓)');
+
+    // statusLine script: show as named entry if backed up; warn about external deps.
+    // Analyze the PORTABLIZED command (with '~') so path classification is correct.
+    const rawBackedSettings = existsSync(permsBackupPath)
+      ? JSON.parse(await readFile(permsBackupPath, 'utf8'))
+      : null;
+    const backedSettings = rawBackedSettings ? localizeSettings(rawBackedSettings) : null;
+    const { localScript: scriptRel, externalDeps } = analyzeStatusLineCommand(rawBackedSettings?.statusLine?.command);
+    if (scriptRel) {
+      const scriptInRepo  = join(globalDataDir(cfg), scriptRel);
+      const scriptLocal   = join(CLAUDE_HOME, scriptRel);
+      const repoContent   = existsSync(scriptInRepo) ? await readFile(scriptInRepo,  'utf8') : null;
+      const localContent  = existsSync(scriptLocal)  ? await readFile(scriptLocal,   'utf8') : null;
+      const scriptDrifted = repoContent !== localContent;
+      syncStates.push(scriptDrifted ? `${scriptRel}(!)` : `${scriptRel}(✓)`);
+      if (scriptDrifted) {
+        any = true;
+        console.log(`[global:${scriptRel}]`);
+        if (!repoContent)  console.log('  repo:  MISSING (would be created on push)');
+        if (!localContent) console.log('  local: MISSING (would be created on pull)');
+        if (repoContent && localContent) console.log('  out of sync — push or pull to reconcile');
+      }
+    }
+    for (const dep of externalDeps) {
+      console.log(`\n  ⚠ statusLine references external path: ${dep}`);
+      console.log('    Not backed up — must be installed on each machine separately.');
+    }
 
     // Always print what the global track covers.
     console.log(`\nglobal track: ${syncStates.join('  ')}`);

@@ -17,7 +17,7 @@ import { cp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { loadConfig, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, localizeSettings, extractStatusLineScript, CLAUDE_HOME } from './_lib.mjs';
+import { loadConfig, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, localizeSettings, analyzeStatusLineCommand, CLAUDE_HOME } from './_lib.mjs';
 
 const argSet = new Set(process.argv.slice(2));
 const FORCE    = argSet.has('--force');
@@ -198,7 +198,12 @@ async function main() {
       }
 
       // Restore any statusLine script that was backed up alongside the settings.
-      const scriptRel = extractStatusLineScript(backed.statusLine?.command);
+      // Warn about external paths that couldn't travel.
+      const { localScript: scriptRel, externalDeps } = analyzeStatusLineCommand(backed.statusLine?.command);
+      for (const dep of externalDeps) {
+        console.warn(`⚠ statusLine references external path: ${dep}`);
+        console.warn(`  Make sure ${dep} is installed on this machine for the status line to work.`);
+      }
       if (scriptRel) {
         const scriptSrc  = join(globalDataDir(cfg), scriptRel);
         const scriptDest = join(CLAUDE_HOME, scriptRel);
