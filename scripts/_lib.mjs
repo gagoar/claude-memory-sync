@@ -38,11 +38,30 @@ export const DEFAULT_GLOBAL_FILES = ['CLAUDE.md', 'RTK.md', 'skills', 'keybindin
 export const SETTINGS_PATH      = join(homedir(), '.claude', 'settings.json');
 export const PERMISSIONS_BACKUP = 'settings.permissions.json'; // stored in data/global/
 
-export function extractPermissions(settingsObj) {
+// Keys extracted from settings.json for cross-machine sync.
+// Full settings.json is never copied (may contain env secrets like tokens).
+const SYNCABLE_KEYS = ['permissions', 'skipAutoPermissionPrompt', 'statusLine'];
+
+export function extractSyncableSettings(settingsObj) {
   const out = {};
-  if (settingsObj.permissions          !== undefined) out.permissions          = settingsObj.permissions;
-  if (settingsObj.skipAutoPermissionPrompt !== undefined) out.skipAutoPermissionPrompt = settingsObj.skipAutoPermissionPrompt;
+  for (const key of SYNCABLE_KEYS) {
+    if (settingsObj[key] !== undefined) out[key] = settingsObj[key];
+  }
   return out;
+}
+
+// Back-compat alias — used by older callers before statusLine was added.
+export const extractPermissions = extractSyncableSettings;
+
+// Replace homedir() with '~' in any string values so paths survive
+// machine transfers where $HOME differs.
+export function portablizeSettings(obj) {
+  return JSON.parse(JSON.stringify(obj).split(homedir()).join('~'));
+}
+
+// Reverse: replace '~' with homedir() when landing on this machine.
+export function localizeSettings(obj) {
+  return JSON.parse(JSON.stringify(obj).split('~').join(homedir()));
 }
 
 // ───────────────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ import { cp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { loadConfig, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP } from './_lib.mjs';
+import { loadConfig, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, localizeSettings } from './_lib.mjs';
 
 const argSet = new Set(process.argv.slice(2));
 const FORCE    = argSet.has('--force');
@@ -175,21 +175,19 @@ async function main() {
       console.log(`[global:${g.name}] +${d.added.length} ~${d.changed.length} -${FORCE ? d.removed.length : 0}`);
     }
 
-    // Settings: merge only permissions from settings.permissions.json — never overwrite full settings.
+    // Settings: merge syncable keys from settings.permissions.json — never overwrite full settings.
     const permsBackupPath = join(globalDataDir(cfg), PERMISSIONS_BACKUP);
     if (existsSync(permsBackupPath)) {
-      const backed = JSON.parse(await readFile(permsBackupPath, 'utf8'));
+      const backed = localizeSettings(JSON.parse(await readFile(permsBackupPath, 'utf8')));
       let local = {};
       if (existsSync(SETTINGS_PATH)) local = JSON.parse(await readFile(SETTINGS_PATH, 'utf8'));
       let settingsChanged = false;
-      if (JSON.stringify(local.permissions) !== JSON.stringify(backed.permissions)) {
-        local.permissions = backed.permissions;
-        settingsChanged = true;
-      }
-      if (backed.skipAutoPermissionPrompt !== undefined &&
-          local.skipAutoPermissionPrompt !== backed.skipAutoPermissionPrompt) {
-        local.skipAutoPermissionPrompt = backed.skipAutoPermissionPrompt;
-        settingsChanged = true;
+      for (const key of ['permissions', 'skipAutoPermissionPrompt', 'statusLine']) {
+        if (backed[key] !== undefined &&
+            JSON.stringify(local[key]) !== JSON.stringify(backed[key])) {
+          local[key] = backed[key];
+          settingsChanged = true;
+        }
       }
       if (settingsChanged) {
         await writeFile(SETTINGS_PATH, JSON.stringify(local, null, 2) + '\n', 'utf8');

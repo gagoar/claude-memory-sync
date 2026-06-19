@@ -6,7 +6,7 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadConfig, listLocalProjects, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, extractPermissions } from './_lib.mjs';
+import { loadConfig, listLocalProjects, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, extractSyncableSettings, localizeSettings } from './_lib.mjs';
 
 async function main() {
   const cfg = loadConfig();
@@ -88,23 +88,23 @@ async function main() {
     }
 
     // Permissions drift: compare settings.permissions.json backup with local settings.json.
+    const SYNC_KEYS = ['permissions', 'skipAutoPermissionPrompt', 'statusLine'];
     const permsBackupPath = join(globalDataDir(cfg), PERMISSIONS_BACKUP);
     if (existsSync(permsBackupPath) && existsSync(SETTINGS_PATH)) {
-      const backed = JSON.parse(await readFile(permsBackupPath, 'utf8'));
-      const local  = extractPermissions(JSON.parse(await readFile(SETTINGS_PATH, 'utf8')));
-      const permsDrift = JSON.stringify(local.permissions) !== JSON.stringify(backed.permissions) ||
-                         local.skipAutoPermissionPrompt !== backed.skipAutoPermissionPrompt;
-      if (permsDrift) {
+      const backed  = localizeSettings(JSON.parse(await readFile(permsBackupPath, 'utf8')));
+      const local   = extractSyncableSettings(JSON.parse(await readFile(SETTINGS_PATH, 'utf8')));
+      const drifted = SYNC_KEYS.filter(k => JSON.stringify(local[k]) !== JSON.stringify(backed[k]) && backed[k] !== undefined);
+      if (drifted.length) {
         any = true;
         console.log('[global:settings.permissions]');
-        console.log('  pull would merge: permissions/skipAutoPermissionPrompt from backup into local settings.json');
+        console.log(`  pull would merge: ${drifted.join(', ')} from backup into local settings.json`);
       }
     } else if (existsSync(permsBackupPath) && !existsSync(SETTINGS_PATH)) {
       any = true;
       console.log('[global:settings.permissions]');
-      console.log('  pull would create: ~/.claude/settings.json with backed-up permissions');
+      console.log('  pull would create: ~/.claude/settings.json with backed-up settings');
     } else if (!existsSync(permsBackupPath) && existsSync(SETTINGS_PATH)) {
-      const local = extractPermissions(JSON.parse(await readFile(SETTINGS_PATH, 'utf8')));
+      const local = extractSyncableSettings(JSON.parse(await readFile(SETTINGS_PATH, 'utf8')));
       if (Object.keys(local).length > 0) {
         any = true;
         console.log('[global:settings.permissions]');

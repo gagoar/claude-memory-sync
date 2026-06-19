@@ -15,7 +15,7 @@ import { cp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { loadConfig, listLocalProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, extractPermissions } from './_lib.mjs';
+import { loadConfig, listLocalProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, extractSyncableSettings, portablizeSettings } from './_lib.mjs';
 
 const args = new Set(process.argv.slice(2));
 const NO_PUSH = args.has('--no-push');
@@ -108,7 +108,7 @@ async function main() {
     }
     if (existsSync(SETTINGS_PATH)) {
       const raw   = JSON.parse(await readFile(SETTINGS_PATH, 'utf8'));
-      const perms = extractPermissions(raw);
+      const perms = portablizeSettings(extractSyncableSettings(raw));
       if (Object.keys(perms).length > 0) {
         const newContent      = JSON.stringify(perms, null, 2) + '\n';
         const existingContent = existsSync(permsBackupPath) ? await readFile(permsBackupPath, 'utf8') : null;
