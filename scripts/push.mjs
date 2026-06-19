@@ -122,7 +122,8 @@ async function main() {
         }
 
         // If statusLine references a script under ~/.claude/, back it up too.
-        const scriptRel = extractStatusLineScript(raw.statusLine?.command);
+        // Use the portablized command (has '~') so extractStatusLineScript matches correctly.
+        const scriptRel = extractStatusLineScript(perms.statusLine?.command);
         if (scriptRel) {
           const scriptSrc  = join(CLAUDE_HOME, scriptRel);
           const scriptDest = join(globalDataDir(cfg), scriptRel);
