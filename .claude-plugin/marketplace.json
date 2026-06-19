@@ -7,14 +7,14 @@
   },
   "metadata": {
     "description": "Push, pull, and diff Claude Code per-project memory to a Git repo of your choice. Installs as a Claude Code skill with interactive selection, HOME-relative storage, and configurable backup destination.",
-    "version": "0.3.6"
+    "version": "0.3.7"
   },
   "plugins": [
     {
       "name": "claude-memory-sync",
       "source": "./",
       "description": "Back up and restore Claude Code per-project memory to your own Git repo. /memory-sync push, pull, status, list, select, configure, doctor.",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "author": {
         "name": "gagoar",
         "url": "https://github.com/gagoar"

@@ -10,14 +10,26 @@
 
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
 import {
   loadConfig,
   homePrefix,
   listRepoProjects,
+  listGlobalEntries,
+  fingerprintEntry,
   fingerprint,
   diff,
   selectionReason,
+  globalEnabled,
+  globalDataDir,
+  PERMISSIONS_BACKUP,
+  SETTINGS_PATH,
+  CLAUDE_HOME,
+  analyzeStatusLineCommand,
+  localizeSettings,
+  extractSyncableSettings,
 } from './_lib.mjs';
 
 const RAW_JSON = process.argv.includes('--json');
@@ -99,6 +111,64 @@ async function main() {
     });
   }
 
+  // Global track analysis.
+  const globalReport = { enabled: globalEnabled(cfg), entries: [], settings: null };
+  if (globalEnabled(cfg)) {
+    const globals = await listGlobalEntries(cfg);
+    for (const g of globals) {
+      const localMap = await fingerprintEntry(g.localPath);
+      const repoMap  = await fingerprintEntry(g.repoPath);
+      const d = diff(repoMap, localMap);
+      globalReport.entries.push({
+        name: g.name,
+        presence: g.presence,
+        inSync: d.added.length === 0 && d.changed.length === 0 && d.removed.length === 0,
+        plan: { add: d.added.length, change: d.changed.length, removed: d.removed.length },
+      });
+    }
+
+    // Settings permissions + statusLine.
+    const permsBackupPath = join(globalDataDir(cfg), PERMISSIONS_BACKUP);
+    const backed = existsSync(permsBackupPath)
+      ? JSON.parse(await readFile(permsBackupPath, 'utf8'))
+      : null;
+    const backedLocalized = backed ? localizeSettings(backed) : null;
+    const localSettingsExists = existsSync(SETTINGS_PATH);
+    const localSettings = localSettingsExists
+      ? extractSyncableSettings(JSON.parse(await readFile(SETTINGS_PATH, 'utf8')))
+      : null;
+
+    // statusLine script analysis — use portablized form for path classification.
+    const { localScript: scriptRel, externalDeps } = analyzeStatusLineCommand(backed?.statusLine?.command);
+    let statusLineInfo = null;
+    if (scriptRel) {
+      const scriptInRepo   = join(globalDataDir(cfg), scriptRel);
+      const scriptLocal    = join(CLAUDE_HOME, scriptRel);
+      statusLineInfo = {
+        type: 'local-script',
+        scriptRel,
+        scriptBacked: existsSync(scriptInRepo),
+        scriptLocalExists: existsSync(scriptLocal),
+        inSync: existsSync(scriptInRepo) && existsSync(scriptLocal) &&
+                (await readFile(scriptInRepo, 'utf8')) === (await readFile(scriptLocal, 'utf8')),
+        externalDeps: [],
+      };
+    } else if (externalDeps.length) {
+      statusLineInfo = { type: 'external-dep', scriptRel: null, scriptBacked: false,
+                         scriptLocalExists: false, inSync: null, externalDeps };
+    }
+
+    globalReport.settings = {
+      backed: !!backed,
+      backedKeys: backed ? Object.keys(backed) : [],
+      localExists: localSettingsExists,
+      inSync: backed && localSettings
+        ? JSON.stringify(localSettings) === JSON.stringify(extractSyncableSettings(backedLocalized))
+        : false,
+      statusLine: statusLineInfo,
+    };
+  }
+
   // Build verdict lines.
   const verdicts = [];
   if (behindBy > 0)   verdicts.push(`backup clone is ${behindBy} commit(s) behind origin — run \`git pull\` in ${REPO}`);
@@ -118,6 +188,34 @@ async function main() {
     verdicts.push(`${pullable.length} project(s) ready to pull: ${pullable.map(p => `${p.portableId || '(root)'} (+${p.plan.add} ~${p.plan.change})`).join(', ')}`);
   if (inSync.length && !blocking.length && !pullable.length && !filtered.length && behindBy === 0)
     verdicts.push('everything looks healthy — local and backup are in sync');
+
+  // Global track verdicts.
+  if (globalEnabled(cfg)) {
+    for (const e of globalReport.entries) {
+      if (e.presence === 'repo')  verdicts.push(`[global:${e.name}] missing locally — pull to restore`);
+      if (e.presence === 'local') verdicts.push(`[global:${e.name}] not yet backed up — push to sync`);
+      if (e.presence === 'both' && !e.inSync) verdicts.push(`[global:${e.name}] out of sync — push or pull to reconcile`);
+    }
+    const s = globalReport.settings;
+    if (s) {
+      if (!s.backed)      verdicts.push('settings.permissions.json not backed up — run push to create it');
+      if (!s.localExists) verdicts.push('~/.claude/settings.json missing locally — pull to restore permissions/statusLine');
+      if (s.backed && s.localExists && !s.inSync)
+        verdicts.push('settings.permissions out of sync — run push or pull to reconcile permissions/statusLine');
+      const sl = s.statusLine;
+      if (sl?.type === 'local-script') {
+        if (!sl.scriptBacked)      verdicts.push(`statusLine script "${sl.scriptRel}" not backed up — run push`);
+        if (!sl.scriptLocalExists) verdicts.push(`statusLine script "${sl.scriptRel}" missing locally — pull to restore`);
+        if (sl.scriptBacked && sl.scriptLocalExists && !sl.inSync)
+          verdicts.push(`statusLine script "${sl.scriptRel}" out of sync — push or pull to reconcile`);
+      }
+      if (sl?.type === 'external-dep') {
+        for (const dep of sl.externalDeps)
+          verdicts.push(`statusLine references external path "${dep}" — not backed up, must be installed on each machine`);
+      }
+    }
+  }
+
   if (verdicts.length === 0)
     verdicts.push('no data in backup repo yet — push from another machine first');
 
@@ -134,6 +232,7 @@ async function main() {
     },
     backupGit: { hasOrigin, head, behindBy, fetchError },
     projects,
+    global: globalReport,
     verdict: verdicts,
   });
 }
