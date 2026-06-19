@@ -63,18 +63,25 @@ async function main() {
     }
   }
 
-  // Global track drift
+  // Global track — always print a summary line, then detail on drift.
   if (globalEnabled(cfg)) {
     const globals = await listGlobalEntries(cfg);
+    const SYNC_KEYS = ['permissions', 'skipAutoPermissionPrompt', 'statusLine'];
+    const permsBackupPath = join(globalDataDir(cfg), PERMISSIONS_BACKUP);
+
+    // Build global summary: list all tracked names + sync status.
+    const globalNames = [...globals.map(g => g.name), 'settings.permissions'];
+    const syncStates  = [];
+
     for (const g of globals) {
       const localMap = await fingerprintEntry(g.localPath);
       const repoMap  = await fingerprintEntry(g.repoPath);
       const pushDiff = diff(localMap, repoMap);
       const pullDiff = diff(repoMap, localMap);
-      if (
-        pushDiff.added.length || pushDiff.changed.length || pushDiff.removed.length ||
-        pullDiff.added.length || pullDiff.changed.length
-      ) {
+      const hasDrift = pushDiff.added.length || pushDiff.changed.length || pushDiff.removed.length ||
+                       pullDiff.added.length || pullDiff.changed.length;
+      syncStates.push(hasDrift ? `${g.name}(!)` : `${g.name}(✓)`);
+      if (hasDrift) {
         any = true;
         console.log(`[global:${g.name}]`);
         if (g.presence === 'local') console.log('  repo:  MISSING (would be created on push)');
@@ -87,30 +94,33 @@ async function main() {
       }
     }
 
-    // Permissions drift: compare settings.permissions.json backup with local settings.json.
-    const SYNC_KEYS = ['permissions', 'skipAutoPermissionPrompt', 'statusLine'];
-    const permsBackupPath = join(globalDataDir(cfg), PERMISSIONS_BACKUP);
+    // Settings permissions + statusLine drift.
+    let permsDrift = false;
     if (existsSync(permsBackupPath) && existsSync(SETTINGS_PATH)) {
       const backed  = localizeSettings(JSON.parse(await readFile(permsBackupPath, 'utf8')));
       const local   = extractSyncableSettings(JSON.parse(await readFile(SETTINGS_PATH, 'utf8')));
       const drifted = SYNC_KEYS.filter(k => JSON.stringify(local[k]) !== JSON.stringify(backed[k]) && backed[k] !== undefined);
       if (drifted.length) {
-        any = true;
+        permsDrift = true; any = true;
         console.log('[global:settings.permissions]');
-        console.log(`  pull would merge: ${drifted.join(', ')} from backup into local settings.json`);
+        console.log(`  pull would merge: ${drifted.join(', ')} → ~/.claude/settings.json`);
       }
     } else if (existsSync(permsBackupPath) && !existsSync(SETTINGS_PATH)) {
-      any = true;
+      permsDrift = true; any = true;
       console.log('[global:settings.permissions]');
       console.log('  pull would create: ~/.claude/settings.json with backed-up settings');
     } else if (!existsSync(permsBackupPath) && existsSync(SETTINGS_PATH)) {
       const local = extractSyncableSettings(JSON.parse(await readFile(SETTINGS_PATH, 'utf8')));
       if (Object.keys(local).length > 0) {
-        any = true;
+        permsDrift = true; any = true;
         console.log('[global:settings.permissions]');
         console.log('  push would create: settings.permissions.json in backup repo');
       }
     }
+    syncStates.push(permsDrift ? 'settings.permissions(!)' : 'settings.permissions(✓)');
+
+    // Always print what the global track covers.
+    console.log(`\nglobal track: ${syncStates.join('  ')}`);
   }
 
   if (!any) {
