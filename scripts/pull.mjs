@@ -13,10 +13,11 @@
 // - Filtered projects (excluded by include/exclude config) are listed at the
 //   end so nothing disappears silently.
 
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { cp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { loadConfig, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled } from './_lib.mjs';
+import { loadConfig, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP } from './_lib.mjs';
 
 const argSet = new Set(process.argv.slice(2));
 const FORCE    = argSet.has('--force');
@@ -172,6 +173,31 @@ async function main() {
       totals.removed  += FORCE ? d.removed.length : 0;
       totals.unchanged += d.unchanged.length;
       console.log(`[global:${g.name}] +${d.added.length} ~${d.changed.length} -${FORCE ? d.removed.length : 0}`);
+    }
+
+    // Settings: merge only permissions from settings.permissions.json — never overwrite full settings.
+    const permsBackupPath = join(globalDataDir(cfg), PERMISSIONS_BACKUP);
+    if (existsSync(permsBackupPath)) {
+      const backed = JSON.parse(await readFile(permsBackupPath, 'utf8'));
+      let local = {};
+      if (existsSync(SETTINGS_PATH)) local = JSON.parse(await readFile(SETTINGS_PATH, 'utf8'));
+      let settingsChanged = false;
+      if (JSON.stringify(local.permissions) !== JSON.stringify(backed.permissions)) {
+        local.permissions = backed.permissions;
+        settingsChanged = true;
+      }
+      if (backed.skipAutoPermissionPrompt !== undefined &&
+          local.skipAutoPermissionPrompt !== backed.skipAutoPermissionPrompt) {
+        local.skipAutoPermissionPrompt = backed.skipAutoPermissionPrompt;
+        settingsChanged = true;
+      }
+      if (settingsChanged) {
+        await writeFile(SETTINGS_PATH, JSON.stringify(local, null, 2) + '\n', 'utf8');
+        console.log('[global:settings.permissions] merged → ~/.claude/settings.json');
+        totals.changed++;
+      } else {
+        totals.unchanged++;
+      }
     }
   }
 

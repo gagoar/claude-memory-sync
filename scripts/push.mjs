@@ -11,10 +11,11 @@
 // - Skips the commit if no changes.
 // - --no-push: commit only, don't push to origin.
 
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { cp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { loadConfig, listLocalProjects, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled } from './_lib.mjs';
+import { loadConfig, listLocalProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, extractPermissions } from './_lib.mjs';
 
 const args = new Set(process.argv.slice(2));
 const NO_PUSH = args.has('--no-push');
@@ -94,6 +95,32 @@ async function main() {
       totals.removed  += d.removed.length;
       totals.unchanged += d.unchanged.length;
       console.log(`[global:${g.name}] +${d.added.length} ~${d.changed.length} -${d.removed.length}`);
+    }
+
+    // Settings permissions: extract only permissions + skipAutoPermissionPrompt.
+    // The full settings.json is never copied — it may contain env secrets.
+    const oldBackupPath  = join(globalDataDir(cfg), 'settings.json');
+    const permsBackupPath = join(globalDataDir(cfg), PERMISSIONS_BACKUP);
+    if (existsSync(oldBackupPath)) {
+      await rm(oldBackupPath);
+      totals.removed++;
+      console.log('[global:settings.json] removed (unsafe full copy — replaced by settings.permissions.json)');
+    }
+    if (existsSync(SETTINGS_PATH)) {
+      const raw   = JSON.parse(await readFile(SETTINGS_PATH, 'utf8'));
+      const perms = extractPermissions(raw);
+      if (Object.keys(perms).length > 0) {
+        const newContent      = JSON.stringify(perms, null, 2) + '\n';
+        const existingContent = existsSync(permsBackupPath) ? await readFile(permsBackupPath, 'utf8') : null;
+        if (existingContent !== newContent) {
+          await mkdir(dirname(permsBackupPath), { recursive: true });
+          await writeFile(permsBackupPath, newContent, 'utf8');
+          if (existingContent) { totals.changed++; console.log('[global:settings.permissions] ~1'); }
+          else                  { totals.added++;   console.log('[global:settings.permissions] +1'); }
+        } else {
+          totals.unchanged++;
+        }
+      }
     }
   }
 

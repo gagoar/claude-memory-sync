@@ -30,10 +30,20 @@ export const CLAUDE_PROJECTS = join(CLAUDE_HOME, 'projects');
 
 // Default files/dirs in ~/.claude/ that the global track covers.
 // Each entry is a path relative to ~/.claude/ — can be a file or a directory.
-// settings.json carries defaultMode, tool allowlist, skipAutoPermissionPrompt —
-// essential to avoid re-accepting every permission on a new machine.
-// settings.local.json is intentionally excluded (may contain secrets/tokens).
-export const DEFAULT_GLOBAL_FILES = ['CLAUDE.md', 'RTK.md', 'skills', 'keybindings.json', 'settings.json'];
+export const DEFAULT_GLOBAL_FILES = ['CLAUDE.md', 'RTK.md', 'skills', 'keybindings.json'];
+
+// settings.json is NOT in the global file list because it may contain secrets
+// in the env block. Only the permissions subset is backed up, via dedicated
+// push/pull steps that extract and merge just these two safe keys:
+export const SETTINGS_PATH      = join(homedir(), '.claude', 'settings.json');
+export const PERMISSIONS_BACKUP = 'settings.permissions.json'; // stored in data/global/
+
+export function extractPermissions(settingsObj) {
+  const out = {};
+  if (settingsObj.permissions          !== undefined) out.permissions          = settingsObj.permissions;
+  if (settingsObj.skipAutoPermissionPrompt !== undefined) out.skipAutoPermissionPrompt = settingsObj.skipAutoPermissionPrompt;
+  return out;
+}
 
 // ───────────────────────────────────────────────────────────────
 // Path encoding helpers

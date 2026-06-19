@@ -3,7 +3,10 @@
 // Filtered projects (excluded by include/exclude config) are listed at the
 // end so nothing disappears silently.
 
-import { loadConfig, listLocalProjects, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled } from './_lib.mjs';
+import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { loadConfig, listLocalProjects, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, extractPermissions } from './_lib.mjs';
 
 async function main() {
   const cfg = loadConfig();
@@ -81,6 +84,31 @@ async function main() {
         if (pushDiff.removed.length) console.log(`  push would remove: ${pushDiff.removed.length} file(s) from repo`);
         if (pullDiff.added.length)   console.log(`  pull would add:    ${pullDiff.added.length} file(s) to local`);
         if (pullDiff.changed.length) console.log(`  pull would change: ${pullDiff.changed.length} file(s) in local`);
+      }
+    }
+
+    // Permissions drift: compare settings.permissions.json backup with local settings.json.
+    const permsBackupPath = join(globalDataDir(cfg), PERMISSIONS_BACKUP);
+    if (existsSync(permsBackupPath) && existsSync(SETTINGS_PATH)) {
+      const backed = JSON.parse(await readFile(permsBackupPath, 'utf8'));
+      const local  = extractPermissions(JSON.parse(await readFile(SETTINGS_PATH, 'utf8')));
+      const permsDrift = JSON.stringify(local.permissions) !== JSON.stringify(backed.permissions) ||
+                         local.skipAutoPermissionPrompt !== backed.skipAutoPermissionPrompt;
+      if (permsDrift) {
+        any = true;
+        console.log('[global:settings.permissions]');
+        console.log('  pull would merge: permissions/skipAutoPermissionPrompt from backup into local settings.json');
+      }
+    } else if (existsSync(permsBackupPath) && !existsSync(SETTINGS_PATH)) {
+      any = true;
+      console.log('[global:settings.permissions]');
+      console.log('  pull would create: ~/.claude/settings.json with backed-up permissions');
+    } else if (!existsSync(permsBackupPath) && existsSync(SETTINGS_PATH)) {
+      const local = extractPermissions(JSON.parse(await readFile(SETTINGS_PATH, 'utf8')));
+      if (Object.keys(local).length > 0) {
+        any = true;
+        console.log('[global:settings.permissions]');
+        console.log('  push would create: settings.permissions.json in backup repo');
       }
     }
   }
