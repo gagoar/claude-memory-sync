@@ -1,6 +1,6 @@
 ---
 name: memory-sync
-description: Push, pull, configure, or list Claude Code per-project memory between this machine and the user's configured backup git repo. Includes an interactive init flow that creates the backup repo for the user. Supports per-project include/exclude selection and HOME-relative storage so memories restore correctly on any machine. Trigger when the user invokes /memory-sync (with mode init, push, pull, status, list, select, configure, migrate) or says "backup my memory", "sync memory", "pull memory", "set up memory backup", "first-time setup", or "which projects do I back up".
+description: Push, pull, configure, list, diagnose, or set up Claude Code per-project memory between this machine and the user's configured backup git repo. Includes an interactive init flow and a doctor mode. Supports per-project include/exclude selection and HOME-relative storage so memories restore correctly on any machine. Trigger when the user invokes /memory-sync (with mode init, push, pull, status, list, select, configure, migrate, doctor) or says "backup my memory", "sync memory", "pull memory", "set up memory backup", "first-time setup", "which projects do I back up", "diagnose memory sync", or "memory not working on another machine".
 ---
 
 # Memory Sync
@@ -28,6 +28,7 @@ The user invokes one of:
 | `status` | Show what's drifted between local and repo (only selected projects + global track). Run `node $SCRIPTS/status.mjs`. No mutation. |
 | `history` | Show recent backup commits with timestamps and what each one changed. Flags: `--limit=N`, `--since=TIME`, `--paths`. Run `node $SCRIPTS/history.mjs <flags>`. No mutation. |
 | `migrate` | One-time migration from an older non-portable layout. Run `node $SCRIPTS/migrate.mjs`. |
+| `doctor` | **Diagnostic tool.** Read-only. Prints a human summary and a fenced `memory-sync-doctor` block the user can paste back into a Claude Code session for analysis. Checks: config validity, backup repo git state (is the clone stale?), HOME/prefix mapping, per-project pull dry-run (add/change/conflict counts), selection filter visibility, and emits a verdict. Run `node $SCRIPTS/doctor.mjs`. Accepts `--json` for raw JSON output. |
 
 **Auto-route to `init` on first contact — this is the most important behavior of this skill.** If `~/.claude/memory-sync.config.json` does not exist (or its `backup_repo_path` field is missing, or that path doesn't resolve to a real git repo) and the user invokes ANY mode at all — including just `/memory-sync` with no args, or natural-language phrases like "back up my memory" — run `init` FIRST. Do not ask the user "what do you want to do?" beforehand. Do not run any push/pull/list/status until init has completed. The presence of a valid config is the only signal that init has already happened.
 
@@ -35,7 +36,7 @@ When init completes, if the user's original request was a different mode (push/p
 
 If a valid config DOES exist and the user invoked the skill without specifying a mode, ask via AskUserQuestion which mode they want. **Don't guess between push and pull** — they are not reversible without thought.
 
-When the user says "which projects am I backing up" / "show what's selected" / "list my projects", invoke `list`. When they say "let me pick projects" / "select projects to back up" / "choose what to sync", invoke `select`. When they say "stop backing up X" / "exclude X" / "only back up X", you can use `configure` directly with the appropriate `--include` or `--exclude` patterns — but for anything beyond one or two projects, **prefer `select`** because the UI is clearer.
+When the user says "which projects am I backing up" / "show what's selected" / "list my projects", invoke `list`. When they say "let me pick projects" / "select projects to back up" / "choose what to sync", invoke `select`. When they say "stop backing up X" / "exclude X" / "only back up X", you can use `configure` directly with the appropriate `--include` or `--exclude` patterns — but for anything beyond one or two projects, **prefer `select`** because the UI is clearer. When the user says "memory isn't working on another machine" / "memory not populating" / "diagnose memory sync" / "why isn't pull working", invoke `doctor` and tell them to paste the fenced block back here.
 
 ## Select mode (interactive)
 

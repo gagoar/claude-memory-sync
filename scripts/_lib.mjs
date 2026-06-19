@@ -201,6 +201,17 @@ export function isProjectSelected(portableId, cfg) {
   return matchesAny(portableId, include) && !matchesAny(portableId, exclude);
 }
 
+// Returns the selection decision with the matching patterns.
+// portableSlug should be portableId || '__root__' — the same value passed to isProjectSelected.
+export function selectionReason(portableSlug, cfg) {
+  const sel = cfg?.projects ?? {};
+  const include = (sel.include && sel.include.length) ? sel.include : ['*'];
+  const exclude = sel.exclude ?? [];
+  const matchedInclude = include.find(p => globToRegex(p).test(portableSlug)) ?? null;
+  const matchedExclude = exclude.find(p => globToRegex(p).test(portableSlug)) ?? null;
+  return { selected: matchedInclude !== null && matchedExclude === null, matchedInclude, matchedExclude };
+}
+
 // ───────────────────────────────────────────────────────────────
 // Project discovery
 // ───────────────────────────────────────────────────────────────

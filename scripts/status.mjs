@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // status.mjs — show what would change if you pushed or pulled. No mutation.
+// Filtered projects (excluded by include/exclude config) are listed at the
+// end so nothing disappears silently.
 
 import { loadConfig, listLocalProjects, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled } from './_lib.mjs';
 
@@ -7,15 +9,25 @@ async function main() {
   const cfg = loadConfig();
   console.log(`backup repo: ${cfg.backup_repo_path}\n`);
 
-  const local = await listLocalProjects(cfg);
-  const repo  = await listRepoProjects(cfg);
+  // Fetch all projects including filtered-out ones.
+  const localAll = await listLocalProjects(cfg, { includeFiltered: true });
+  const repoAll  = await listRepoProjects(cfg, { includeFiltered: true });
+
+  const local = localAll.filter(p => p.selected);
+  const repo  = repoAll.filter(p => p.selected);
+
+  // Collect portable ids of filtered-out projects (union from both sides).
+  const filteredIds = new Set([
+    ...localAll.filter(p => !p.selected).map(p => p.portableId || '(root)'),
+    ...repoAll.filter(p => !p.selected).map(p => p.portableId || '(root)'),
+  ]);
 
   const allKeys = new Set([
     ...local.map(p => p.localKey),
     ...repo.map(p => p.localKey),
   ]);
 
-  if (allKeys.size === 0) {
+  if (allKeys.size === 0 && filteredIds.size === 0) {
     console.log('no per-project memory directories anywhere.');
     return;
   }
@@ -73,7 +85,19 @@ async function main() {
     }
   }
 
-  if (!any) console.log('✓ local and backup repo are in sync.');
+  if (!any) {
+    if (allKeys.size > 0) {
+      console.log('✓ local and backup repo are in sync.');
+    } else {
+      console.log('no selected projects have memory directories.');
+    }
+  }
+
+  if (filteredIds.size > 0) {
+    const ids = [...filteredIds].sort().join(', ');
+    console.log(`\n  (${filteredIds.size} project(s) not shown — filtered by include/exclude: ${ids})`);
+    console.log('  Use `/memory-sync list` to see all projects.');
+  }
 }
 
 main().catch(err => { console.error(err.message || err); process.exit(1); });
