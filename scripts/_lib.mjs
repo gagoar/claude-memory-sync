@@ -82,11 +82,17 @@ export function analyzeStatusLineCommand(command) {
   if (!command) return { localScript: null, externalDeps: [] };
   let localScript = null;
   const externalDeps = [];
+  // Recognize both the portablized form (~/.claude/) and the absolute form
+  // (homedir()/.claude/) so this function is correct regardless of whether
+  // the caller passes the raw backup string or the localized version.
+  const homeClaude = join(homedir(), '.claude') + '/';
   for (const token of command.split(/\s+/)) {
     if (!token || token.startsWith('-')) continue;
     if (INTERPRETERS.has(token.split('/').pop())) continue;
     if (token.startsWith('~/.claude/')) {
       localScript = token.slice('~/.claude/'.length);
+    } else if (token.startsWith(homeClaude)) {
+      localScript = token.slice(homeClaude.length);
     } else if (token.startsWith('/') || token.startsWith('~/')) {
       externalDeps.push(token);
     }
