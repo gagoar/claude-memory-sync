@@ -17,7 +17,7 @@ import { cp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { loadConfig, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, localizeSettings } from './_lib.mjs';
+import { loadConfig, listRepoProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, localizeSettings, extractStatusLineScript, CLAUDE_HOME } from './_lib.mjs';
 
 const argSet = new Set(process.argv.slice(2));
 const FORCE    = argSet.has('--force');
@@ -195,6 +195,28 @@ async function main() {
         totals.changed++;
       } else {
         totals.unchanged++;
+      }
+
+      // Restore any statusLine script that was backed up alongside the settings.
+      const scriptRel = extractStatusLineScript(backed.statusLine?.command);
+      if (scriptRel) {
+        const scriptSrc  = join(globalDataDir(cfg), scriptRel);
+        const scriptDest = join(CLAUDE_HOME, scriptRel);
+        if (existsSync(scriptSrc)) {
+          const newScript = await readFile(scriptSrc, 'utf8');
+          const oldScript = existsSync(scriptDest) ? await readFile(scriptDest, 'utf8') : null;
+          if (newScript !== oldScript) {
+            await mkdir(dirname(scriptDest), { recursive: true });
+            await writeFile(scriptDest, newScript, 'utf8');
+            // Preserve executable bit.
+            const { chmod } = await import('node:fs/promises');
+            await chmod(scriptDest, 0o755);
+            if (oldScript) { totals.changed++; console.log(`[global:${scriptRel}] ~1 → ~/.claude/${scriptRel}`); }
+            else            { totals.added++;   console.log(`[global:${scriptRel}] +1 → ~/.claude/${scriptRel}`); }
+          } else {
+            totals.unchanged++;
+          }
+        }
       }
     }
   }

@@ -64,6 +64,18 @@ export function localizeSettings(obj) {
   return JSON.parse(JSON.stringify(obj).split('~').join(homedir()));
 }
 
+// Parse a shell command string and return the path of any script that lives
+// under ~/.claude/, relative to ~/.claude/. Returns null if none found.
+// e.g. "bash ~/.claude/statusline-byob.sh" → "statusline-byob.sh"
+export function extractStatusLineScript(command) {
+  if (!command) return null;
+  const prefix = '~/.claude/';
+  for (const token of command.split(/\s+/)) {
+    if (token.startsWith(prefix)) return token.slice(prefix.length);
+  }
+  return null;
+}
+
 // ───────────────────────────────────────────────────────────────
 // Path encoding helpers
 // ───────────────────────────────────────────────────────────────

@@ -15,7 +15,7 @@ import { cp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { loadConfig, listLocalProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, extractSyncableSettings, portablizeSettings } from './_lib.mjs';
+import { loadConfig, listLocalProjects, listGlobalEntries, fingerprint, fingerprintEntry, diff, globalEnabled, globalDataDir, SETTINGS_PATH, PERMISSIONS_BACKUP, extractSyncableSettings, portablizeSettings, extractStatusLineScript, CLAUDE_HOME } from './_lib.mjs';
 
 const args = new Set(process.argv.slice(2));
 const NO_PUSH = args.has('--no-push');
@@ -119,6 +119,25 @@ async function main() {
           else                  { totals.added++;   console.log('[global:settings.permissions] +1'); }
         } else {
           totals.unchanged++;
+        }
+
+        // If statusLine references a script under ~/.claude/, back it up too.
+        const scriptRel = extractStatusLineScript(raw.statusLine?.command);
+        if (scriptRel) {
+          const scriptSrc  = join(CLAUDE_HOME, scriptRel);
+          const scriptDest = join(globalDataDir(cfg), scriptRel);
+          if (existsSync(scriptSrc)) {
+            const newScript = await readFile(scriptSrc, 'utf8');
+            const oldScript = existsSync(scriptDest) ? await readFile(scriptDest, 'utf8') : null;
+            if (newScript !== oldScript) {
+              await mkdir(dirname(scriptDest), { recursive: true });
+              await writeFile(scriptDest, newScript, 'utf8');
+              if (oldScript) { totals.changed++; console.log(`[global:${scriptRel}] ~1`); }
+              else            { totals.added++;   console.log(`[global:${scriptRel}] +1`); }
+            } else {
+              totals.unchanged++;
+            }
+          }
         }
       }
     }
