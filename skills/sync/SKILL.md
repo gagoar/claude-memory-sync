@@ -1,6 +1,6 @@
 ---
 name: sync
-description: Push, pull, configure, list, diagnose, or set up Claude Code per-project memory between this machine and the user's configured backup git repo. Includes an interactive init flow and a doctor mode. Supports per-project include/exclude selection and HOME-relative storage so memories restore correctly on any machine. Trigger when the user invokes /memory-sync:sync (with mode init, push, pull, status, list, select, configure, migrate, doctor) or says "backup my memory", "sync memory", "pull memory", "set up memory backup", "first-time setup", "which projects do I back up", "diagnose memory sync", or "memory not working on another machine".
+description: "/memory-sync:sync — Back up and restore Claude Code per-project memory to a private Git repo. Supports push, pull, status, list, select, history, configure, init, doctor. HOME-relative storage works across machines."
 ---
 
 # Memory Sync
