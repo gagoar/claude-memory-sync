@@ -11,7 +11,15 @@ Storage is **HOME-relative** — memory captured on `/Users/alice/...` restores 
 **Step 1-3 — install the plugin.** Type these in Claude Code:
 
 ```
-/plugin marketplace add gagoar/claude-memory-sync
+/plugin marketplace add github:gagoar/gago-plugins
+/plugin install claude-memory-sync@gago-plugins
+/reload-plugins
+```
+
+Or standalone:
+
+```
+/plugin marketplace add github:gagoar/claude-memory-sync
 /plugin install claude-memory-sync@claude-memory-sync
 /reload-plugins
 ```
@@ -75,8 +83,8 @@ Your `~/.claude/memory-sync.config.json` is preserved (the plugin manager only t
 Same flow, with one change at step 4:
 
 ```
-/plugin marketplace add gagoar/claude-memory-sync
-/plugin install claude-memory-sync@claude-memory-sync
+/plugin marketplace add github:gagoar/gago-plugins
+/plugin install claude-memory-sync@gago-plugins
 /reload-plugins
 /memory-sync init       # pick "Clone an existing remote", give your backup-repo URL
 /memory-sync pull       # restore every memory file
