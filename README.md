@@ -4,35 +4,32 @@ A [Claude Code](https://claude.com/claude-code) plugin that backs up and restore
 
 Storage is **HOME-relative** — memory captured on `/Users/alice/...` restores cleanly on `/Users/bob/...` with no manual renaming.
 
+**Webpage:** [gagoar.github.io/claude-memory-sync](https://gagoar.github.io/claude-memory-sync)
+
 ---
 
-## Install (4 steps total)
+## Install
 
-**Step 1-3 — install the plugin.** Type these in Claude Code:
-
+Via the [gago-plugins](https://gagoar.github.io/gago-plugins) marketplace:
 ```
-/plugin marketplace add github:gagoar/gago-plugins
-/plugin install claude-memory-sync@gago-plugins
+/plugin marketplace add gagoar/gago-plugins
+/plugin install memory-sync@gago-plugins
 /reload-plugins
 ```
-
 Or standalone:
-
 ```
-/plugin marketplace add github:gagoar/claude-memory-sync
-/plugin install claude-memory-sync@claude-memory-sync
+/plugin marketplace add gagoar/claude-memory-sync
+/plugin install memory-sync@memory-sync
 /reload-plugins
 ```
-
-**Step 4 — set up your backup repo.** Type:
-
+Then set up your backup repo:
 ```
-/memory-sync init
+/memory-sync:sync init
 ```
 
 The skill will **ask you where to put your backup repo** (and offer to create a private one on GitHub for you, if you don't have one). It then configures everything. That's it — no other typing required.
 
-> 💡 You can also just say *"set up memory backup"* or *"back up my memory"* and Claude will route to the same setup flow. Init runs automatically the first time you invoke any memory-sync command without a configured backup.
+> You can also just say *"set up memory backup"* or *"back up my memory"* and Claude will route to the same setup flow. Init runs automatically the first time you invoke any memory-sync command without a configured backup.
 
 ---
 
@@ -40,13 +37,13 @@ The skill will **ask you where to put your backup repo** (and offer to create a 
 
 | You type | What happens |
 |---|---|
-| `/memory-sync push` | Back up new/changed memory + global config to your repo |
-| `/memory-sync pull` | Restore from your repo |
-| `/memory-sync status` | See what's drifted |
-| `/memory-sync list` | Show projects and global files that are backed up |
-| `/memory-sync select` | Pick which projects to include (interactive checkboxes) |
-| `/memory-sync history` | Show recent backup commits — *what* was backed up *when* |
-| `/memory-sync configure --backup-repo=NEW` | Switch backup destination |
+| `/memory-sync:sync push` | Back up new/changed memory + global config to your repo |
+| `/memory-sync:sync pull` | Restore from your repo |
+| `/memory-sync:sync status` | See what's drifted |
+| `/memory-sync:sync list` | Show projects and global files that are backed up |
+| `/memory-sync:sync select` | Pick which projects to include (interactive checkboxes) |
+| `/memory-sync:sync history` | Show recent backup commits — *what* was backed up *when* |
+| `/memory-sync:sync configure --backup-repo=NEW` | Switch backup destination |
 
 `push` no-ops when nothing has changed. `pull` refuses to overwrite local changes that aren't in the backup unless `--force` is passed.
 
@@ -64,30 +61,38 @@ Nothing else under `~/.claude/` is touched — never `settings.json`, sessions, 
 When the plugin gains new features:
 
 ```
-/plugin update claude-memory-sync@claude-memory-sync
+/plugin update memory-sync@memory-sync
 /reload-plugins
 ```
 
 Or just refresh the marketplace + reinstall:
 
 ```
-/plugin marketplace update claude-memory-sync
-/plugin update claude-memory-sync@claude-memory-sync
+/plugin marketplace update memory-sync
+/plugin update memory-sync@memory-sync
 /reload-plugins
 ```
 
-Your `~/.claude/memory-sync.config.json` is preserved (the plugin manager only touches its own cache directory). Re-run `/memory-sync init` only if a release adds a new config field that needs your input.
+Your `~/.claude/memory-sync.config.json` is preserved (the plugin manager only touches its own cache directory). Re-run `/memory-sync:sync init` only if a release adds a new config field that needs your input.
 
 ## On a new computer
 
-Same flow, with one change at step 4:
+Same flow, with one change at setup:
 
 ```
-/plugin marketplace add github:gagoar/gago-plugins
-/plugin install claude-memory-sync@gago-plugins
+/plugin marketplace add gagoar/gago-plugins
+/plugin install memory-sync@gago-plugins
 /reload-plugins
-/memory-sync init       # pick "Clone an existing remote", give your backup-repo URL
-/memory-sync pull       # restore every memory file
+/memory-sync:sync init       # pick "Clone an existing remote", give your backup-repo URL
+/memory-sync:sync pull       # restore every memory file
+```
+
+Or standalone:
+
+```
+/plugin marketplace add gagoar/claude-memory-sync
+/plugin install memory-sync@memory-sync
+/reload-plugins
 ```
 
 Memory lands in `~/.claude/projects/<project>/memory/` with project keys automatically rewritten for this machine's `$HOME`.

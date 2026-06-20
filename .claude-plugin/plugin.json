@@ -1,6 +1,6 @@
 {
-  "name": "claude-memory-sync",
-  "version": "0.3.8",
+  "name": "memory-sync",
+  "version": "0.4.0",
   "description": "Push, pull, and diff Claude Code per-project memory between this machine and a Git repo of your choice. Storage is HOME-relative so memories restore correctly on any machine regardless of username. Includes a doctor mode for diagnosing sync problems.",
   "author": {
     "name": "gagoar",
@@ -16,6 +16,6 @@
     "claude-code"
   ],
   "skills": [
-    "./skills/memory-sync"
+    "./skills/sync"
   ]
 }
