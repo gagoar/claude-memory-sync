@@ -1,21 +1,20 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "memory-sync",
-  "id": "memory-sync",
   "owner": {
     "name": "gagoar",
     "url": "https://github.com/gagoar"
   },
   "metadata": {
     "description": "Push, pull, and diff Claude Code per-project memory to a Git repo of your choice. Installs as a Claude Code skill with interactive selection, HOME-relative storage, and configurable backup destination.",
-    "version": "0.4.0"
+    "version": "0.4.1"
   },
   "plugins": [
     {
       "name": "memory-sync",
       "source": "./",
       "description": "Back up and restore Claude Code per-project memory to your own Git repo. /memory-sync:sync push, pull, status, list, select, configure, doctor.",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "author": {
         "name": "gagoar",
         "url": "https://github.com/gagoar"
