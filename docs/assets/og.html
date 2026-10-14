@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>memory-sync</title>
+<style>
+@font-face { font-family: "Martian Mono"; font-weight: 400; src: url("fonts/martian-mono-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Martian Mono"; font-weight: 700; src: url("fonts/martian-mono-latin-700-normal.woff2") format("woff2"); }
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:1200px;height:630px;background:#14101f;color:#ece8f7;font-family:"Martian Mono",ui-monospace,monospace;position:relative;overflow:hidden}
+.k{position:absolute;left:72px;top:64px;font-size:20px;letter-spacing:.08em;text-transform:uppercase;color:#c3a6ff}
+h1{position:absolute;left:72px;top:104px;font-size:96px;font-weight:700;letter-spacing:-.04em;line-height:1}
+h1 span{color:#ff6b9d}
+p{position:absolute;left:72px;top:230px;width:760px;font-size:30px;line-height:1.4;color:#ece8f7;font-family:system-ui,sans-serif}
+svg{position:absolute;left:0;top:330px}
+</style></head><body>
+<div class="k">Claude Code Plugin</div>
+<h1>memory<span>-</span>sync</h1>
+<p>Back up and restore Claude Code memory across machines.</p>
+<svg width="1200" height="300" viewBox="0 0 1200 300" style="font-family:'Martian Mono',monospace;font-size:20px">
+<line x1="72" y1="50" x2="1128" y2="50" stroke="#ff6b9d" stroke-width="5"/>
+<line x1="420" y1="150" x2="1128" y2="150" stroke="#7cf0c9" stroke-width="5"/>
+<line x1="800" y1="250" x2="1128" y2="250" stroke="#8ab4ff" stroke-width="5"/>
+<path d="M300 50 C 300 110, 420 100, 420 150" fill="none" stroke="#ff6b9d" stroke-width="5"/>
+<path d="M520 50 C 520 110, 600 100, 600 150" fill="none" stroke="#ff6b9d" stroke-width="5"/>
+<path d="M600 150 C 600 230, 860 200, 860 250" fill="none" stroke="#7cf0c9" stroke-width="5"/>
+<path d="M720 50 C 720 110, 610 110, 606 142" fill="none" stroke="#ffd166" stroke-width="5" stroke-dasharray="4 9" stroke-linecap="round"/>
+<g stroke="#14101f" stroke-width="4"><circle cx="140" cy="50" r="13" fill="#ff6b9d"/><circle cx="300" cy="50" r="13" fill="#ff6b9d"/><circle cx="520" cy="50" r="13" fill="#ff6b9d"/><circle cx="420" cy="150" r="13" fill="#7cf0c9"/><circle cx="600" cy="150" r="13" fill="#7cf0c9"/><circle cx="860" cy="250" r="13" fill="#8ab4ff"/></g>
+<circle cx="720" cy="50" r="13" fill="#14101f" stroke="#ffd166" stroke-width="5"/>
+<text x="72" y="100" fill="#ff6b9d">machine A</text>
+<text x="760" y="104" fill="#ffd166">status</text>
+<text x="72" y="170" fill="#7cf0c9">private repo</text>
+<text x="72" y="270" fill="#8ab4ff">machine B</text>
+<text x="880" y="206" fill="#c3a6ff">$HOME-relative</text>
+</svg>
+</body></html>

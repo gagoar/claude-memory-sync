@@ -52,7 +52,7 @@ async function main() {
       pullDiff.added.length || pullDiff.changed.length
     ) {
       any = true;
-      console.log(`[${key}]`);
+      console.log("[" + key + "]");
       if (!proj.hasLocal) console.log('  local: MISSING (would be created on pull)');
       if (!proj.hasRepo)  console.log('  repo:  MISSING (would be created on push)');
       if (pushDiff.added.length)   console.log(`  push would add:    ${pushDiff.added.length} file(s)`);

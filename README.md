@@ -136,6 +136,6 @@ claude plugin validate . --strict
 
 The gate fails on three things the plugin-directory upload scanner holds for review:
 
-- A skill, agent, or command that pre-approves `Write`, `Edit`, or `Bash` with no path scope. Write `Write(./docs/**)`, not `Write`.
+- A skill, agent, or command that pre-approves `Write`, `Edit`, or `Bash` with no path scope. Write `Write(./src/**)`, not `Write`.
 - Shipped code that copies the whole environment (`...process.env`, `Object.keys(process.env)`). Read the named variables you need.
 - A committed native executable. The scanner cannot read it.
