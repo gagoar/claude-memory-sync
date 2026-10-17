@@ -1,6 +1,13 @@
 # claude-memory-sync
 
+<img src="docs/assets/icon.svg" alt="" width="72" align="right">
+
 A [Claude Code](https://claude.com/claude-code) plugin that backs up and restores per-project memory to a Git repo of your choice.
+
+[![Release](https://img.shields.io/github/v/release/gagoar/claude-memory-sync?color=c3a6ff)](https://github.com/gagoar/claude-memory-sync/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-7cf0c9)](LICENSE)
+[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-c3a6ff)](https://gagoar.github.io/claude-memory-sync/)
+[![Stars](https://img.shields.io/github/stars/gagoar/claude-memory-sync?style=flat&color=ff6b9d)](https://github.com/gagoar/claude-memory-sync/stargazers)
 
 Storage is **HOME-relative** — memory captured on `/Users/alice/...` restores cleanly on `/Users/bob/...` with no manual renaming.
 
@@ -118,6 +125,12 @@ Projects outside `$HOME` (rare) live under `data/absolute-projects/` and only re
 - **This plugin repo is public** and contains no user data.
 - **Your backup repo is yours.** Use a private repo — memory often contains project names, hostnames, identifiers.
 - The plugin only ever reads/writes `~/.claude/projects/*/memory/` and your backup repo.
+
+---
+
+## Terms
+
+The plugin is provided under the MIT license (see [LICENSE](./LICENSE)), as is, without warranty. It copies files between `~/.claude/projects/*/memory/` and a Git repo you choose, and you are responsible for that repo's visibility and contents. For help or to report a problem, open an issue at [github.com/gagoar/claude-memory-sync/issues](https://github.com/gagoar/claude-memory-sync/issues).
 
 ---
 
